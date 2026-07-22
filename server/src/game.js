@@ -1,0 +1,222 @@
+// 방(Room) + 게임 상태 관리
+import { buildPool, shuffle, setCountForPlayers } from './tiles.js';
+import { validateCommit } from './rules.js';
+
+const INITIAL_HAND = 14; // 시작 손패 수
+
+// 개인화된 상태를 만든다 (요청한 플레이어 기준: 내 손패만 전체 공개)
+export function serializeState(room, forPlayerId) {
+  const players = room.order.map((pid) => {
+    const p = room.players.get(pid);
+    return {
+      id: pid,
+      name: p.name,
+      connected: p.connected,
+      handCount: room.game ? room.game.racks[pid]?.length ?? 0 : 0,
+      brokeIn: room.game ? !!room.game.brokeIn[pid] : false,
+    };
+  });
+
+  const base = {
+    type: 'state',
+    roomId: room.id,
+    phase: room.phase, // 'lobby' | 'playing' | 'ended'
+    players,
+    hostId: room.order[0] ?? null,
+    you: forPlayerId,
+  };
+
+  if (room.game) {
+    const g = room.game;
+    const isMyTurn = g.order[g.currentIndex] === forPlayerId;
+    // 내 턴이 아니고 현재 턴 플레이어의 draft가 있으면 그 draft를 보여준다 (실시간 관전)
+    const board = !isMyTurn && g.draftBoard ? g.draftBoard : g.board;
+    Object.assign(base, {
+      board,
+      poolCount: g.pool.length,
+      currentPlayerId: g.order[g.currentIndex],
+      isMyTurn,
+      myHand: g.racks[forPlayerId] ?? [],
+      brokeIn: !!g.brokeIn[forPlayerId],
+      winnerId: g.winnerId ?? null,
+      turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
+    });
+  }
+
+  return base;
+}
+
+export class Room {
+  constructor(id) {
+    this.id = id;
+    this.players = new Map(); // playerId -> { id, name, connected, socket }
+    this.order = []; // 좌석 순서 (playerId[])
+    this.phase = 'lobby';
+    this.game = null;
+  }
+
+  isEmpty() {
+    return [...this.players.values()].every((p) => !p.connected);
+  }
+
+  addPlayer(playerId, name, socket) {
+    this.players.set(playerId, { id: playerId, name, connected: true, socket });
+    if (!this.order.includes(playerId)) this.order.push(playerId);
+  }
+
+  // 이름으로 끊긴 좌석 재접속 시도. 성공하면 기존 playerId 반환.
+  reattachByName(name, socket) {
+    for (const [pid, p] of this.players) {
+      if (p.name === name && !p.connected) {
+        p.connected = true;
+        p.socket = socket;
+        return pid;
+      }
+    }
+    return null;
+  }
+
+  removeSocket(playerId) {
+    const p = this.players.get(playerId);
+    if (!p) return;
+    p.connected = false;
+    p.socket = null;
+    // 로비 단계면 좌석에서 완전히 제거
+    if (this.phase === 'lobby') {
+      this.players.delete(playerId);
+      this.order = this.order.filter((id) => id !== playerId);
+    }
+  }
+
+  connectedCount() {
+    return [...this.players.values()].filter((p) => p.connected).length;
+  }
+
+  // 게임 시작 (로비에 있는 아무나 호출 가능)
+  start() {
+    const seated = this.order.filter((pid) => this.players.get(pid)?.connected);
+    if (seated.length < 2) {
+      return { ok: false, reason: '최소 2명이 있어야 시작할 수 있어.' };
+    }
+    if (seated.length > 6) {
+      return { ok: false, reason: '최대 6명까지만 가능해.' };
+    }
+
+    const setCount = setCountForPlayers(seated.length);
+    let pool = shuffle(buildPool(setCount));
+
+    const racks = {};
+    for (const pid of seated) {
+      racks[pid] = pool.slice(0, INITIAL_HAND);
+      pool = pool.slice(INITIAL_HAND);
+    }
+
+    const brokeIn = {};
+    for (const pid of seated) brokeIn[pid] = false;
+
+    this.phase = 'playing';
+    this.game = {
+      order: seated,
+      currentIndex: 0,
+      board: [], // Meld[]
+      pool,
+      racks,
+      brokeIn,
+      setCount,
+      draftBoard: null, // 현재 턴 플레이어의 실시간 draft
+      turnStartBoard: [], // 현재 턴 시작 시점 보드 (되돌리기 기준)
+      winnerId: null,
+    };
+    return { ok: true };
+  }
+
+  currentPlayerId() {
+    if (!this.game) return null;
+    return this.game.order[this.game.currentIndex];
+  }
+
+  advanceTurn() {
+    const g = this.game;
+    g.draftBoard = null;
+    // 다음으로 접속돼 있는 플레이어를 찾는다 (없으면 그냥 다음)
+    for (let step = 1; step <= g.order.length; step += 1) {
+      const idx = (g.currentIndex + step) % g.order.length;
+      const pid = g.order[idx];
+      if (this.players.get(pid)?.connected) {
+        g.currentIndex = idx;
+        break;
+      }
+    }
+    g.turnStartBoard = deepClone(g.board);
+  }
+
+  // 한 장 뽑기 (턴 종료). 풀이 비면 그냥 패스.
+  draw(playerId) {
+    const g = this.game;
+    if (!g || this.currentPlayerId() !== playerId) {
+      return { ok: false, reason: '네 턴이 아니야.' };
+    }
+    if (g.pool.length > 0) {
+      const tile = g.pool.shift();
+      g.racks[playerId].push(tile);
+    }
+    this.advanceTurn();
+    return { ok: true };
+  }
+
+  // 실시간 draft 갱신 (검증 X, 관전용)
+  updateDraft(playerId, board) {
+    const g = this.game;
+    if (!g || this.currentPlayerId() !== playerId) return { ok: false };
+    g.draftBoard = board;
+    return { ok: true };
+  }
+
+  // 턴 커밋 (제출)
+  commit(playerId, proposedBoard) {
+    const g = this.game;
+    if (!g || this.currentPlayerId() !== playerId) {
+      return { ok: false, reason: '네 턴이 아니야.' };
+    }
+    const result = validateCommit({
+      turnStartBoard: g.turnStartBoard,
+      proposedBoard,
+      rack: g.racks[playerId],
+      brokeIn: g.brokeIn[playerId],
+    });
+    if (!result.ok) return result;
+
+    // 적용
+    g.board = normalizeBoard(proposedBoard);
+    g.racks[playerId] = result.newRack;
+    g.brokeIn[playerId] = true;
+    g.draftBoard = null;
+
+    // 승리 판정
+    if (result.newRack.length === 0) {
+      g.winnerId = playerId;
+      this.phase = 'ended';
+      return { ok: true, ended: true };
+    }
+
+    this.advanceTurn();
+    return { ok: true };
+  }
+
+  // 로비로 리셋 (새 게임)
+  resetToLobby() {
+    this.phase = 'lobby';
+    this.game = null;
+  }
+}
+
+function deepClone(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
+// 보드 정리: 빈 멜드 제거, 멜드 id 보장
+function normalizeBoard(board) {
+  return board
+    .filter((m) => m.tiles && m.tiles.length > 0)
+    .map((m, i) => ({ id: m.id ?? `m_${i}`, tiles: m.tiles }));
+}

@@ -1,0 +1,14 @@
+{
+  "name": "rummikub-server",
+  "version": "1.0.0",
+  "description": "Rummikub 실시간 멀티플레이 서버 (Node.js + ws)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
