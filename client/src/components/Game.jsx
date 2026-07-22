@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
 import { isValidMeld, meldValue } from '../rules.js';
 
@@ -248,6 +248,98 @@ export default function Game({ state, me, actions, reject, nudged }) {
   }, [deadlineLocal]);
   const remainSec = deadlineLocal ? Math.max(0, Math.ceil((deadlineLocal - now) / 1000)) : null;
 
+  // ---- 타일 이동 애니메이션 (FLIP) ----
+  // 렌더마다 타일들의 화면 위치를 기억하고, 위치가 바뀌면 이전 위치→새 위치로 날아가게 한다.
+  // 처음 보는 타일은 출처를 추정: 손패에 생기면 뽑기 더미에서, 보드에 생기면 현재 턴 좌석에서.
+  const rootRef = useRef(null);
+  const prevRectsRef = useRef(new Map()); // tileId -> DOMRect
+  const skipFlipRef = useRef(new Set()); // 내가 방금 드롭한 타일은 제자리 등장이 자연스러움
+  const firstFlipRef = useRef(true);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    // 위치는 앵커(손패는 랙 그리드, 그 외는 루트) 상대좌표로 저장한다.
+    // 창/랙 스크롤로 뷰포트 좌표가 통째로 밀려도 오탐 비행이 안 생기게.
+    const rackGrid = root.querySelector('.rack-grid');
+    const rootRect = root.getBoundingClientRect();
+    const rackRect = rackGrid ? rackGrid.getBoundingClientRect() : null;
+    const anchorRect = (ax) => (ax === 'rack' ? rackRect : rootRect);
+
+    const prev = prevRectsRef.current;
+    const skip = skipFlipRef.current;
+    const firstRun = firstFlipRef.current;
+    firstFlipRef.current = false;
+    skipFlipRef.current = new Set();
+
+    const next = new Map();
+    const moves = [];
+    for (const el of root.querySelectorAll('[data-tileid]')) {
+      const id = el.dataset.tileid;
+      if (el._flying) {
+        if (prev.has(id)) next.set(id, prev.get(id)); // 비행 중엔 도착지 좌표 유지
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      const inRack = rackGrid ? rackGrid.contains(el) : false;
+      const ax = inRack ? 'rack' : 'root';
+      const aRect = anchorRect(ax);
+      if (!aRect) continue;
+      next.set(id, { ax, left: r.left - aRect.left, top: r.top - aRect.top });
+      if (skip.has(id)) continue;
+
+      let fromLeft = null;
+      let fromTop = null;
+      const p = prev.get(id);
+      if (p) {
+        const pa = anchorRect(p.ax);
+        if (!pa) continue;
+        fromLeft = pa.left + p.left;
+        fromTop = pa.top + p.top;
+      } else {
+        // 처음 보는 타일: 손패에 생기면 뽑기 더미에서, 보드에 생기면 현재 턴 좌석에서
+        if (firstRun && !inRack) continue; // 재접속 직후 보드 전체가 날아오는 건 과함
+        const src = inRack
+          ? root.querySelector('.pool-stack')
+          : root.querySelector(`[data-seatid="${state.currentPlayerId}"] .mini-fan`);
+        if (!src) continue;
+        const s = src.getBoundingClientRect();
+        fromLeft = s.left + s.width / 2 - r.width / 2;
+        fromTop = s.top + s.height / 2 - r.height / 2;
+      }
+      const dx = fromLeft - r.left;
+      const dy = fromTop - r.top;
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) continue;
+      moves.push([el, dx, dy]);
+    }
+    prevRectsRef.current = next;
+
+    if (moves.length) {
+      for (const [el, dx, dy] of moves) {
+        el._flying = true;
+        el.style.transition = 'none';
+        el.style.animation = 'none'; // tile-in 애니메이션과 transform 충돌 방지
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        el.style.zIndex = '5';
+      }
+      // 강제 리플로우로 시작 위치를 확정한 뒤 같은 틱에 전환 시작.
+      // (rAF는 백그라운드 탭에서 멈춰 타일이 출발 위치에 굳을 수 있음)
+      void root.offsetWidth;
+      for (const [el] of moves) {
+        el.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1)';
+        el.style.transform = '';
+      }
+      setTimeout(() => {
+        for (const [el] of moves) {
+          el._flying = false;
+          el.style.transition = '';
+          el.style.animation = '';
+          el.style.zIndex = '';
+        }
+      }, 330);
+    }
+  });
+
   // 재촉받으면 화면 테두리 펄스 (서버가 턴 플레이어에게만 보냄)
   const [nudgeFx, setNudgeFx] = useState(null);
   useEffect(() => {
@@ -472,6 +564,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag) return;
+    skipFlipRef.current = new Set(drag.ids);
 
     if (drag.from === 'board') {
       // 내 손패 타일만 회수 가능 (테이블 타일은 규칙상 불가)
@@ -524,6 +617,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag || !isMyTurn || !draftBoard) return;
+    skipFlipRef.current = new Set(drag.ids);
     const anchor = getDropAnchor(e.currentTarget, e.clientX);
     if (drag.ids.length === 1 && anchor === drag.ids[0]) return;
     // 1장짜리 멜드의 그 타일을 같은 멜드에 다시 놓는 건 제자리(멜드가 끝으로 점프하는 버그 방지)
@@ -560,6 +654,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag || !isMyTurn || !draftBoard) return;
+    skipFlipRef.current = new Set(drag.ids);
     applyDraft((d) => {
       let tiles = [];
       if (drag.from === 'board') {
@@ -598,7 +693,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
       : state.players.filter((p) => p.id !== me.playerId);
 
   return (
-    <div className="game">
+    <div className="game" ref={rootRef}>
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {ended ? (
           <b>게임 종료</b>
@@ -618,7 +713,6 @@ export default function Game({ state, me, actions, reject, nudged }) {
             ⏱ {Math.floor(remainSec / 60)}:{String(remainSec % 60).padStart(2, '0')}
           </span>
         )}
-        <span className="pool-tag">남은 타일 {state.poolCount}</span>
       </div>
 
       {/* 테이블 (보드) */}
@@ -627,6 +721,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
           {opponents.map((p) => (
             <div
               key={p.id}
+              data-seatid={p.id}
               className={[
                 'seat',
                 p.id === state.currentPlayerId ? 'turn' : '',
@@ -701,6 +796,28 @@ export default function Game({ state, me, actions, reject, nudged }) {
             </div>
           )}
         </div>
+
+        {/* 뽑기 더미 — 내 턴엔 클릭으로 한 장 뽑기 */}
+        {playing && (
+          <button
+            type="button"
+            className={[
+              'pool-pile',
+              isMyTurn ? 'can-draw' : '',
+              state.poolCount === 0 ? 'empty' : '',
+            ].join(' ')}
+            onClick={isMyTurn ? actions.draw : undefined}
+            disabled={!isMyTurn}
+            title={isMyTurn ? '한 장 뽑기 (턴 넘김)' : `남은 타일 ${state.poolCount}`}
+          >
+            <span className="pool-stack">
+              <span className="pool-tile" />
+              <span className="pool-tile" />
+              <span className="pool-tile" />
+            </span>
+            <span className="pool-count">{state.poolCount}</span>
+          </button>
+        )}
       </div>
 
       {/* 내 손패 (2줄 슬롯 — 언제든 정렬 가능) */}

@@ -394,10 +394,75 @@ button:disabled {
   padding: 1px 6px;
   border-radius: 20px;
 }
-.pool-tag {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--muted);
+/* 뽑기 더미 (테이블 오른쪽 아래) */
+.pool-pile {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 4px;
+}
+.pool-pile:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.pool-pile.empty {
+  opacity: 0.45;
+}
+.pool-stack {
+  position: relative;
+  width: 36px;
+  height: 47px;
+  display: block;
+  transition: transform 0.15s ease;
+}
+.pool-tile {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(165deg, #faf5e8, var(--tile-face) 55%, #efe7d2);
+  border: 1px solid var(--tile-edge);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+.pool-tile:nth-child(1) {
+  transform: translate(-5px, 3px) rotate(-7deg);
+}
+.pool-tile:nth-child(2) {
+  transform: translate(4px, -2px) rotate(5deg);
+}
+.pool-tile:nth-child(3)::after {
+  /* 맨 위 타일 뒷면의 원형 홈 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #efe7d2, #d9cfb8);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.pool-count {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1px 9px;
+  border-radius: 10px;
+}
+.pool-pile.can-draw {
+  cursor: pointer;
+}
+.pool-pile.can-draw .pool-tile:nth-child(3) {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), 0 0 10px rgba(56, 189, 248, 0.35);
+}
+.pool-pile.can-draw:hover .pool-stack {
+  transform: translateY(-3px);
 }
 
 /* 상대 플레이어 좌석 (테이블 위) */
@@ -533,9 +598,6 @@ button:disabled {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.turn-timer + .pool-tag {
-  margin-left: 0; /* 타이머가 있으면 auto 밀기는 타이머가 담당 */
-}
 .turn-timer.low {
   color: var(--no);
   animation: timer-pulse 1s ease-in-out infinite;
@@ -586,6 +648,7 @@ button:disabled {
 
 /* 테이블(펠트) */
 .table-area {
+  position: relative; /* 뽑기 더미 배치 기준 */
   background: radial-gradient(120% 100% at 50% 15%, #1a6b47 0%, var(--felt) 45%, var(--felt-2) 100%);
   border-radius: 14px;
   padding: 16px;
@@ -603,6 +666,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 12px;
   align-content: flex-start;
+  padding-right: 64px; /* 뽑기 더미 자리 확보 */
 }
 .meld {
   display: flex;
