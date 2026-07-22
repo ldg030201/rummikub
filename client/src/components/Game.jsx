@@ -56,7 +56,15 @@ export default function Game({ state, me, actions, reject }) {
     }
     if (isMyTurn) {
       if (!initedRef.current) {
-        setDraft({ board: clone(state.board), rack: clone(state.myHand) });
+        // 서버 board(=미제출 draft 포함)에 이미 올라간 손패 타일은 rack에서 제외.
+        // (새로고침해도 내가 배치하던 상태가 복원됨. 평소엔 board에 손패 타일이 없어 rack=전체)
+        const boardIds = new Set(
+          (state.board || []).flatMap((m) => (m.tiles || []).map((t) => t.id))
+        );
+        setDraft({
+          board: clone(state.board),
+          rack: clone(state.myHand).filter((t) => !boardIds.has(t.id)),
+        });
         initedRef.current = true;
       }
     } else {
@@ -65,9 +73,14 @@ export default function Game({ state, me, actions, reject }) {
     }
   }, [playing, isMyTurn, state]);
 
-  // 렌더링할 보드: 내 턴이면 draft, 아니면 서버 보드(현재 플레이어의 실시간 draft 포함)
-  const board = isMyTurn && draft ? draft.board : state.board;
-  const rack = isMyTurn && draft ? draft.rack : state.myHand;
+  // 렌더링할 보드: 내 턴이면 draft, 아니면 서버 보드(현재 플레이어의 실시간 draft 포함).
+  // 혹시 모를 잘못된 형태는 걸러서 렌더 중 크래시를 막는다 (방어적).
+  const rawBoard = isMyTurn && draft ? draft.board : state.board;
+  const board = Array.isArray(rawBoard)
+    ? rawBoard.filter((m) => m && Array.isArray(m.tiles))
+    : [];
+  const rawRack = isMyTurn && draft ? draft.rack : state.myHand;
+  const rack = Array.isArray(rawRack) ? rawRack : [];
 
   const turnStartIds = useMemo(
     () => new Set((state.turnStartBoard || []).flatMap((m) => m.tiles.map((t) => t.id))),
@@ -85,8 +98,15 @@ export default function Game({ state, me, actions, reject }) {
     return sum;
   }, [state.brokeIn, isMyTurn, draft, turnStartIds]);
 
-  // draft 브로드캐스트 (관전자 실시간 동기화)
-  const broadcast = (nextBoard) => actions.sendDraft(nextBoard);
+  // draft 변경 헬퍼: 현재 draft를 복제 → mutate → 상태 반영 + 브로드캐스트 1회.
+  // (setState 업데이터 안에서 부수효과를 내면 StrictMode에서 2번 전송되므로 밖에서 처리)
+  const applyDraft = (mutate) => {
+    if (!draft) return;
+    const d = clone(draft);
+    if (mutate(d) === false) return;
+    setDraft(d);
+    actions.sendDraft(d.board); // 관전자 실시간 동기화
+  };
 
   // ---- DnD 핸들러 ----
   const onDragStart = (e, tile) => {
@@ -107,13 +127,13 @@ export default function Game({ state, me, actions, reject }) {
     e.preventDefault();
     setOverTarget(null);
     const tileId = dragRef.current;
+    dragRef.current = null;
     if (!tileId || !draft) return;
     const anchor = getDropAnchor(e.currentTarget, e.clientX);
     if (anchor === tileId) return; // 제자리
-    setDraft((prev) => {
-      const d = clone(prev);
+    applyDraft((d) => {
       const tile = extractTile(d, tileId);
-      if (!tile) return prev;
+      if (!tile) return false;
       const meld = d.board.find((m) => m.id === meldId);
       if (!meld) {
         d.board.push({ id: newMeldId(), tiles: [tile] });
@@ -122,46 +142,40 @@ export default function Game({ state, me, actions, reject }) {
         if (idx < 0) idx = meld.tiles.length;
         meld.tiles.splice(idx, 0, tile);
       }
-      broadcast(d.board);
-      return d;
+      return true;
     });
-    dragRef.current = null;
   };
 
   const dropIntoRack = (e) => {
     e.preventDefault();
     setOverTarget(null);
     const tileId = dragRef.current;
+    dragRef.current = null;
     if (!tileId || !draft) return;
     const anchor = getDropAnchor(e.currentTarget, e.clientX);
     if (anchor === tileId) return;
-    setDraft((prev) => {
-      const d = clone(prev);
+    applyDraft((d) => {
       const tile = extractTile(d, tileId);
-      if (!tile) return prev;
+      if (!tile) return false;
       let idx = anchor ? d.rack.findIndex((t) => t.id === anchor) : d.rack.length;
       if (idx < 0) idx = d.rack.length;
       d.rack.splice(idx, 0, tile);
-      broadcast(d.board);
-      return d;
+      return true;
     });
-    dragRef.current = null;
   };
 
   const dropIntoNewMeld = (e) => {
     e.preventDefault();
     setOverTarget(null);
     const tileId = dragRef.current;
-    if (!tileId || !draft) return;
-    setDraft((prev) => {
-      const d = clone(prev);
-      const tile = extractTile(d, tileId);
-      if (!tile) return prev;
-      d.board.push({ id: newMeldId(), tiles: [tile] });
-      broadcast(d.board);
-      return d;
-    });
     dragRef.current = null;
+    if (!tileId || !draft) return;
+    applyDraft((d) => {
+      const tile = extractTile(d, tileId);
+      if (!tile) return false;
+      d.board.push({ id: newMeldId(), tiles: [tile] });
+      return true;
+    });
   };
 
   // ---- 버튼 ----
@@ -169,7 +183,7 @@ export default function Game({ state, me, actions, reject }) {
   const resetTurn = () => {
     const base = state.turnStartBoard || state.board;
     setDraft({ board: clone(base), rack: clone(state.myHand) });
-    broadcast(clone(base));
+    actions.sendDraft(clone(base)); // 관전자 화면도 되돌림
   };
   const sortRack = (mode) => {
     if (!draft) return;
