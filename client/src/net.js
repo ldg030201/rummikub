@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 function wsUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
   const loc = window.location;
-  // Vite 개발 서버(5173)에서 열었으면 → 백엔드는 8080
+  // Vite 개발 서버(5173)에서 열었으면 → 백엔드는 8123
   if (loc.port === '5173') {
-    return `ws://${loc.hostname}:8080/ws`;
+    return `ws://${loc.hostname}:8123/ws`;
   }
   // 프로덕션(Node 서버가 직접 서빙) → 같은 호스트
   const proto = loc.protocol === 'https:' ? 'wss' : 'ws';

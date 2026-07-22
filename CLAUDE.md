@@ -15,15 +15,15 @@ React + Vite 프론트엔드와 Node.js(`ws`) 실시간 서버로 만든 **온�
 
 ```bash
 npm run install:all      # server + client 의존성 설치 (최초 1회)
-./run.sh                 # 클라이언트 빌드 + 서버 실행 (기본 8080) — 공유용
+./run.sh                 # 클라이언트 빌드 + 서버 실행 (기본 8123) — 공유용
 ./run.sh 8091            # 포트 지정
-npm run dev:server       # 개발용 서버(8080)
+npm run dev:server       # 개발용 서버(8123)
 npm run dev:client       # 개발용 Vite(5173, HMR)
 npm test                 # 서버 테스트 (node --test)
 ```
 
-- **공유 모드**: `./run.sh` 또는 `npm run share` → Node 서버가 빌드된 프론트와 실시간을 **한 포트**에서 서빙. LAN은 `http://<내IP>:8080`, 외부는 `ngrok http 8080`.
-- **개발 모드**: 서버(8080) + Vite(5173) 따로. 5173에서 접속하면 프론트가 8080 웹소켓에 자동 연결.
+- **공유 모드**: `./run.sh` 또는 `npm run share` → Node 서버가 빌드된 프론트와 실시간을 **한 포트**에서 서빙. LAN은 `http://<내IP>:8123`, 외부는 `ngrok http 8123`.
+- **개발 모드**: 서버(8123) + Vite(5173) 따로. 5173에서 접속하면 프론트가 8123 웹소켓에 자동 연결.
 - 서버는 IntelliJ에서 `server/src/index.js`를 Node로 실행해도 됨.
 
 ## 구조

@@ -2,7 +2,7 @@
 # 🀄 루미큐브 실행 스크립트 (공유 모드: 클라이언트 빌드 → 서버가 프론트+실시간 모두 서빙)
 #
 # 사용법:
-#   ./run.sh              클라이언트 빌드 + 서버 실행 (기본 포트 8080)
+#   ./run.sh              클라이언트 빌드 + 서버 실행 (기본 포트 8123)
 #   ./run.sh 8091         포트 지정
 #   PORT=8091 ./run.sh    환경변수로 포트 지정
 #   ./run.sh --no-build   빌드 건너뛰고 서버만 실행 (프론트 안 바뀌었을 때)
@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-PORT="${PORT:-8080}"
+PORT="${PORT:-8123}"
 BUILD=1
 for arg in "$@"; do
   case "$arg" in

@@ -2,7 +2,7 @@
 //  - HTTP: 빌드된 클라이언트(client/dist) 정적 서빙 (SPA fallback)
 //  - WS  : /ws 에서 실시간 게임 동기화
 //
-// 실행: npm start  (기본 포트 8080, PORT 환경변수로 변경 가능)
+// 실행: npm start  (기본 포트 8123, PORT 환경변수로 변경 가능)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +14,7 @@ import { Room, serializeState } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
-const PORT = Number(process.env.PORT) || 8080;
+const PORT = Number(process.env.PORT) || 8123;
 
 const rooms = new Map(); // roomId -> Room
 

@@ -40,7 +40,7 @@ npm run install:all
 npm run share
 ```
 
-이러면 클라이언트를 빌드하고 서버를 `http://localhost:8080` 에 띄워. 이 주소 하나만 공유하면 돼.
+이러면 클라이언트를 빌드하고 서버를 `http://localhost:8123` 에 띄워. 이 주소 하나만 공유하면 돼.
 
 > IntelliJ에서 켜는 방법: 오른쪽 위 실행 구성 → `server/src/index.js` 를 Node.js 로 실행하거나,
 > 터미널 탭에서 `npm run share` 실행. (프론트를 고친 뒤엔 `npm run build` 를 다시 해야 반영됨)
@@ -50,7 +50,7 @@ npm run share
 터미널 2개로 나눠서:
 
 ```bash
-# 터미널 1 — 실시간 서버 (8080)
+# 터미널 1 — 실시간 서버 (8123)
 npm run dev:server
 
 # 터미널 2 — Vite 개발 서버 (5173, HMR)
@@ -58,7 +58,7 @@ npm run dev:client
 ```
 
 접속: `http://localhost:5173`
-개발 모드에선 프론트(5173)가 백엔드(8080)로 웹소켓을 자동 연결해.
+개발 모드에선 프론트(5173)가 백엔드(8123)로 웹소켓을 자동 연결해.
 
 ---
 
@@ -74,7 +74,7 @@ npm run dev:client
    예: `172.168.0.134`
 3. 친구들에게 이 주소를 공유:
    ```
-   http://172.168.0.134:8080
+   http://172.168.0.134:8123
    ```
    (IP는 네트워크마다 다르니 매번 확인해)
 4. 같은 방 코드를 입력하면 함께 플레이!
@@ -87,10 +87,10 @@ npm run dev:client
 같은 WiFi가 아니어도 되게 하려면 [ngrok](https://ngrok.com) 을 쓴다.
 
 1. ngrok 설치 (`brew install ngrok` 또는 공식 사이트에서 다운로드) 후 계정 토큰 등록.
-2. **공유 모드**로 서버를 8080에 띄운다.
+2. **공유 모드**로 서버를 8123에 띄운다.
 3. 새 터미널에서:
    ```bash
-   ngrok http 8080
+   ngrok http 8123
    ```
 4. ngrok이 준 `https://xxxx.ngrok-free.app` 주소를 친구에게 공유하면 끝.
    (HTTPS라서 웹소켓도 `wss://` 로 자동 연결돼 — 별도 설정 불필요)
@@ -122,7 +122,7 @@ npm run dev:client
 npm test
 ```
 
-(28개 테스트 — 세트/런/조커 판정, 첫 등록 30점, 재배열, 승리 판정, 세트 수 등)
+(38개 테스트 — 세트/런/조커 판정, 첫 등록 30점, 재배열, 승리 판정, 위조 차단, phase 가드 등)
 
 ---
 
@@ -130,7 +130,7 @@ npm test
 
 | 증상 | 해결 |
 |------|------|
-| `EADDRINUSE: address already in use :::8080` | 8080 포트를 이미 다른 게 쓰는 중. 다른 포트로: `PORT=8091 npm start` (공유 모드는 `PORT=8091 npm run share`) |
+| `EADDRINUSE: address already in use :::8123` | 8123 포트를 이미 다른 게 쓰는 중. 다른 포트로: `PORT=8091 npm start` (공유 모드는 `PORT=8091 npm run share`) |
 | 친구가 LAN 주소로 접속 안 됨 | 같은 WiFi인지 확인 + macOS 방화벽에서 Node 허용 |
 | "클라이언트가 아직 빌드되지 않았어" 페이지 | `npm run build` 를 먼저 실행 (공유 모드는 자동으로 빌드함) |
 | 개발 모드에서 서버 포트를 바꿈 | `client/.env` 에 `VITE_WS_URL=ws://localhost:<포트>/ws` 추가 |
