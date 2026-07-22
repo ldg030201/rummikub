@@ -61,12 +61,13 @@ export function isValidMeld(tiles) {
   return isGroup(tiles) || isRun(tiles);
 }
 
-// 멜드의 점수 합 (조커는 대체한 타일 값으로 계산) — 첫 등록 30점 계산용
+// 멜드의 점수 합 (조커는 대체한 타일 값으로 계산) — 첫 등록 30점 계산용.
+// 그룹이자 런으로 동시에 유효한 조커 멜드(예: [빨강9,조커,조커])는 더 높은 해석을 택한다.
 export function meldValue(tiles) {
+  let best = 0;
   if (isGroup(tiles)) {
     const reals = tiles.filter((t) => !t.joker);
-    const num = reals[0].num;
-    return num * tiles.length; // 그룹은 모두 같은 숫자
+    best = Math.max(best, reals[0].num * tiles.length); // 그룹은 모두 같은 숫자
   }
   if (isRun(tiles)) {
     let start = null;
@@ -78,9 +79,9 @@ export function meldValue(tiles) {
     }
     let sum = 0;
     for (let i = 0; i < tiles.length; i += 1) sum += start + i;
-    return sum;
+    best = Math.max(best, sum);
   }
-  return 0;
+  return best;
 }
 
 // 보드 전체가 유효한지: 모든 멜드가 유효
@@ -93,7 +94,20 @@ export function validateBoard(board) {
   return { ok: true };
 }
 
-// ---- 유틸: 보드/멜드의 타일 id 모으기 ----
+// 클라이언트가 보낸 board가 안전한 형태인지 (크래시 방지용 스키마 검증)
+export function isBoardShape(board) {
+  if (!Array.isArray(board)) return false;
+  for (const meld of board) {
+    if (!meld || typeof meld !== 'object') return false;
+    if (!Array.isArray(meld.tiles)) return false;
+    for (const t of meld.tiles) {
+      if (!t || typeof t !== 'object' || typeof t.id !== 'string') return false;
+    }
+  }
+  return true;
+}
+
+// ---- 유틸: 보드/멜드의 타일 id 모으기 (서버가 만든 신뢰 보드에만 사용) ----
 function boardTileIds(board) {
   const ids = [];
   for (const meld of board) {
@@ -116,39 +130,49 @@ function meldKey(meld) {
 // rack: 플레이어의 손패 (Tile[])
 // brokeIn: 이미 첫 등록을 마쳤는지
 //
-// 반환: { ok, reason?, playedTileIds?, newRack? }
+// 반환: { ok, reason?, playedTileIds?, newRack?, board? }
+//  board: 서버 권위 타일로 재구성된 보드 (game.js가 이걸 저장)
 export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn }) {
-  // 0) 기본 형태
-  if (!Array.isArray(proposedBoard)) {
+  // 0) 형태 검증 (크래시 방지 — 이후 로직은 안전한 board만 다룬다)
+  if (!isBoardShape(proposedBoard)) {
     return { ok: false, reason: '보드 형식이 올바르지 않아.' };
   }
 
-  const startIds = boardTileIds(turnStartBoard);
-  const startIdSet = new Set(startIds);
+  const startIdSet = new Set(boardTileIds(turnStartBoard));
   const rackById = new Map(rack.map((t) => [t.id, t]));
 
-  const proposedIds = boardTileIds(proposedBoard);
-
-  // 1) id 중복 없음
-  if (new Set(proposedIds).size !== proposedIds.length) {
-    return { ok: false, reason: '같은 타일이 중복으로 놓였어.' };
+  // 권위 타일 맵: id -> 원본 타일 (기존 테이블 + 내 손패).
+  // 클라이언트가 보낸 color/num/joker 값은 신뢰하지 않고, id로 원본을 조회해 재구성한다.
+  const authMap = new Map();
+  for (const meld of turnStartBoard) {
+    for (const t of meld.tiles) authMap.set(t.id, t);
   }
+  for (const t of rack) authMap.set(t.id, t);
 
-  // 2) 모든 제출 타일은 (기존 테이블) 또는 (내 손패)에서만 와야 함
+  const authBoard = [];
+  const seen = new Set();
   const playedTileIds = [];
-  for (const id of proposedIds) {
-    if (startIdSet.has(id)) continue; // 기존 테이블 타일
-    if (rackById.has(id)) {
-      playedTileIds.push(id);
-      continue;
+  for (const meld of proposedBoard) {
+    const tiles = [];
+    for (const t of meld.tiles) {
+      const auth = authMap.get(t.id);
+      if (!auth) {
+        return { ok: false, reason: '내 손패나 테이블에 없는 타일이 포함됐어.' };
+      }
+      if (seen.has(t.id)) {
+        return { ok: false, reason: '같은 타일이 중복으로 놓였어.' };
+      }
+      seen.add(t.id);
+      // 원본 속성으로 복제 (클라 위조 방지)
+      tiles.push({ id: auth.id, color: auth.color, num: auth.num, joker: auth.joker });
+      if (!startIdSet.has(t.id)) playedTileIds.push(t.id); // 손패에서 새로 낸 타일
     }
-    return { ok: false, reason: '내 손패나 테이블에 없는 타일이 포함됐어.' };
+    authBoard.push({ id: meld.id, tiles });
   }
 
   // 3) 테이블에 있던 타일은 손패로 되돌릴 수 없음 (전부 그대로 테이블에 남아야 함)
-  const proposedIdSet = new Set(proposedIds);
-  for (const id of startIds) {
-    if (!proposedIdSet.has(id)) {
+  for (const id of startIdSet) {
+    if (!seen.has(id)) {
       return { ok: false, reason: '테이블에 있던 타일을 손패로 가져올 수 없어.' };
     }
   }
@@ -158,8 +182,8 @@ export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn })
     return { ok: false, reason: '손패에서 최소 한 장은 내야 해. (아니면 한 장 뽑기)' };
   }
 
-  // 5) 보드 전체 유효성
-  const boardCheck = validateBoard(proposedBoard);
+  // 5) 보드 전체 유효성 (권위 타일 기준)
+  const boardCheck = validateBoard(authBoard);
   if (!boardCheck.ok) {
     return { ok: false, reason: '유효하지 않은 조합이 있어.', invalidMeldId: boardCheck.invalidMeldId };
   }
@@ -171,7 +195,7 @@ export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn })
     const matchedStartKeys = new Set();
     let newMeldsValue = 0;
 
-    for (const meld of proposedBoard) {
+    for (const meld of authBoard) {
       const ids = meld.tiles.map((t) => t.id);
       const allFromTable = ids.every((id) => startIdSet.has(id));
       const allFromRack = ids.every((id) => rackById.has(id));
@@ -206,7 +230,7 @@ export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn })
   const playedSet = new Set(playedTileIds);
   const newRack = rack.filter((t) => !playedSet.has(t.id));
 
-  return { ok: true, playedTileIds, newRack };
+  return { ok: true, playedTileIds, newRack, board: authBoard };
 }
 
 export { INITIAL_MELD_MIN };
