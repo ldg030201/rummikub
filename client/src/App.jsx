@@ -48,7 +48,12 @@ export default function App() {
           <div className="layout">
             <div className="content">
               {state.phase === 'lobby' && (
-                <WaitingRoom state={state} me={me} onStart={actions.start} />
+                <WaitingRoom
+                  state={state}
+                  me={me}
+                  onStart={actions.start}
+                  onSettings={actions.sendSettings}
+                />
               )}
               {(state.phase === 'playing' || state.phase === 'ended') && (
                 <Game state={state} me={me} actions={actions} reject={reject} nudged={nudged} />

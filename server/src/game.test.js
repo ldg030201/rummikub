@@ -222,3 +222,27 @@ test('timeoutTurn: 한 장 뽑아주고 턴 넘김 + draft 폐기', () => {
   room.phase = 'ended';
   assert.equal(room.timeoutTurn().ok, false);
 });
+
+test('settings: 방장만 로비에서 변경 + 화이트리스트 검증', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.updateSettings('p2', { turnTimeMs: 60000 }).ok, false); // 방장 아님
+  const r = room.updateSettings('p1', { turnTimeMs: 60000, maxPlayers: 4, setCount: 2 });
+  assert.equal(r.ok, true);
+  assert.deepEqual(room.settings, { turnTimeMs: 60000, maxPlayers: 4, setCount: 2 });
+  assert.equal(room.updateSettings('p1', { turnTimeMs: 12345 }).ok, false);
+  assert.equal(room.updateSettings('p1', { maxPlayers: 9 }).ok, false);
+  assert.equal(room.updateSettings('p1', { setCount: 3 }).ok, false);
+  room.start();
+  assert.equal(room.updateSettings('p1', { turnTimeMs: 30000 }).ok, false); // 게임 중
+});
+
+test('settings: 2세트 강제 반영 + 무제한 턴은 deadline 없음', () => {
+  const room = twoPlayerRoom();
+  room.updateSettings('p1', { setCount: 2, turnTimeMs: 0 });
+  room.start();
+  assert.equal(room.game.setCount, 2);
+  assert.equal(room.game.pool.length, 212 - 28);
+  assert.equal(room.game.turnDeadline, null);
+  room.draw(room.currentPlayerId());
+  assert.equal(room.game.turnDeadline, null); // 턴 넘어가도 무제한 유지
+});

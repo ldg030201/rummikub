@@ -175,6 +175,10 @@ export function useRummikub() {
   const newGame = useCallback(() => rawSend({ type: 'newGame' }), [rawSend]);
   const sendChat = useCallback((text) => rawSend({ type: 'chat', text }), [rawSend]);
   const nudge = useCallback(() => rawSend({ type: 'nudge' }), [rawSend]);
+  const sendSettings = useCallback(
+    (settings) => rawSend({ type: 'settings', settings }),
+    [rawSend]
+  );
   const leave = useCallback(() => {
     rawSend({ type: 'leave' });
     ss.del('rk_active');
@@ -195,6 +199,17 @@ export function useRummikub() {
     reject,
     chat,
     nudged,
-    actions: { join, start, draw, sendDraft, commit, newGame, sendChat, nudge, leave },
+    actions: {
+      join,
+      start,
+      draw,
+      sendDraft,
+      commit,
+      newGame,
+      sendChat,
+      nudge,
+      sendSettings,
+      leave,
+    },
   };
 }

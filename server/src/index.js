@@ -359,6 +359,14 @@ wss.on('connection', (ws, req) => {
             send(ws, { type: 'error', message: '이미 같은 이름이 방에 있어.' });
             return;
           }
+          // 방 설정 정원 (로비의 players는 접속자만 남음)
+          if (room.players.size >= room.settings.maxPlayers) {
+            send(ws, {
+              type: 'error',
+              message: `방이 꽉 찼어 (최대 ${room.settings.maxPlayers}명).`,
+            });
+            return;
+          }
           playerId = randomUUID();
           room.addPlayer(playerId, name, ws);
         }
@@ -375,6 +383,18 @@ wss.on('connection', (ws, req) => {
         pushState(room);
         // 채팅 기록 전달 (입장/재접속 시)
         send(ws, { type: 'chatHistory', messages: room.chat });
+        break;
+      }
+
+      case 'settings': {
+        const room = rooms.get(ctx.roomId);
+        if (!room) return;
+        const r = room.updateSettings(ctx.playerId, msg.settings);
+        if (!r.ok) {
+          send(ws, { type: 'error', message: r.reason });
+          return;
+        }
+        pushState(room);
         break;
       }
 

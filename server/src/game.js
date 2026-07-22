@@ -4,8 +4,12 @@ import { buildPool, shuffle, setCountForPlayers } from './tiles.js';
 import { validateCommit, isBoardShape } from './rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
-// 턴 제한시간. 공식 룰은 1분이지만 온라인 드래그 조작이 실물보다 느려 90초로 완화.
+// 턴 제한시간 기본값. 공식 룰은 1분이지만 온라인 드래그 조작이 실물보다 느려 90초로 완화.
 export const TURN_TIME_MS = 90 * 1000;
+
+// 대기실에서 방장이 고를 수 있는 설정값 (서버 검증용 화이트리스트)
+export const TURN_TIME_OPTIONS = [0, 30000, 60000, 90000, 120000, 180000]; // 0 = 무제한
+export const SET_COUNT_OPTIONS = ['auto', 1, 2];
 
 // 개인화된 상태를 만든다 (요청한 플레이어 기준: 내 손패만 전체 공개)
 export function serializeState(room, forPlayerId) {
@@ -27,6 +31,7 @@ export function serializeState(room, forPlayerId) {
     players,
     hostId: room.order[0] ?? null,
     you: forPlayerId,
+    settings: room.settings,
   };
 
   if (room.game) {
@@ -61,6 +66,36 @@ export class Room {
     this.phase = 'lobby';
     this.game = null;
     this.chat = []; // { name, text, ts, system } 최근 200개
+    // 방 설정 (대기실에서 방장이 변경)
+    this.settings = { turnTimeMs: TURN_TIME_MS, maxPlayers: 6, setCount: 'auto' };
+  }
+
+  // 방장(첫 좌석)만 로비에서 설정 변경 가능. 알 수 없는 키/값은 무시·거부.
+  updateSettings(playerId, patch) {
+    if (this.phase !== 'lobby') return { ok: false, reason: '게임 중엔 설정을 바꿀 수 없어.' };
+    if (this.order[0] !== playerId) return { ok: false, reason: '방장만 설정을 바꿀 수 있어.' };
+    if (!patch || typeof patch !== 'object') return { ok: false, reason: '잘못된 설정이야.' };
+    const next = { ...this.settings };
+    if ('turnTimeMs' in patch) {
+      if (!TURN_TIME_OPTIONS.includes(patch.turnTimeMs)) return { ok: false, reason: '잘못된 턴 시간이야.' };
+      next.turnTimeMs = patch.turnTimeMs;
+    }
+    if ('maxPlayers' in patch) {
+      const n = patch.maxPlayers;
+      if (!Number.isInteger(n) || n < 2 || n > 6) return { ok: false, reason: '인원은 2~6명이야.' };
+      next.maxPlayers = n;
+    }
+    if ('setCount' in patch) {
+      if (!SET_COUNT_OPTIONS.includes(patch.setCount)) return { ok: false, reason: '잘못된 세트 수야.' };
+      next.setCount = patch.setCount;
+    }
+    this.settings = next;
+    return { ok: true };
+  }
+
+  // 현재 설정 기준 턴 마감시각 (무제한이면 null)
+  nextDeadline() {
+    return this.settings.turnTimeMs > 0 ? Date.now() + this.settings.turnTimeMs : null;
   }
 
   // 채팅 추가 (트림·200자 제한·최대 200개 유지). 빈 메시지는 null.
@@ -157,7 +192,12 @@ export class Room {
       return { ok: false, reason: '최대 6명까지만 가능해.' };
     }
 
-    const setCount = setCountForPlayers(seated.length);
+    // 세트 수: 설정 우선, 자동이면 인원 기준. 5인 이상은 1세트가 모자라 무조건 2세트.
+    let setCount =
+      this.settings.setCount === 'auto'
+        ? setCountForPlayers(seated.length)
+        : this.settings.setCount;
+    if (seated.length >= 5) setCount = 2;
     let pool = shuffle(buildPool(setCount));
 
     const racks = {};
@@ -180,7 +220,7 @@ export class Room {
       setCount,
       draftBoard: null, // 현재 턴 플레이어의 실시간 draft
       turnStartBoard: [], // 현재 턴 시작 시점 보드 (되돌리기 기준)
-      turnDeadline: Date.now() + TURN_TIME_MS, // 이 시각까지 제출/뽑기 안 하면 자동 뽑기+턴 넘김
+      turnDeadline: this.nextDeadline(), // 이 시각까지 제출/뽑기 안 하면 자동 뽑기+턴 넘김 (무제한이면 null)
       winnerId: null,
     };
     return { ok: true };
@@ -204,7 +244,7 @@ export class Room {
       }
     }
     g.turnStartBoard = deepClone(g.board);
-    g.turnDeadline = Date.now() + TURN_TIME_MS;
+    g.turnDeadline = this.nextDeadline();
   }
 
   // 한 장 뽑기 (턴 종료). 풀이 비면 그냥 패스.

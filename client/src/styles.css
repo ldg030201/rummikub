@@ -379,6 +379,40 @@ button:disabled {
   text-align: center;
 }
 
+/* 대기실 방 설정 */
+.room-settings {
+  background: var(--panel-2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+.setting-label {
+  color: var(--muted);
+}
+.room-settings select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #3b4a63;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+.room-settings .hint {
+  margin: 0;
+  text-align: right;
+}
+
 /* ---- 게임 ---- */
 .game {
   display: flex;
