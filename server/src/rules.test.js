@@ -8,6 +8,7 @@ import {
   meldValue,
   validateBoard,
   validateCommit,
+  isBoardShape,
 } from './rules.js';
 
 const T = (id, color, num) => ({ id, color, num, joker: false });
@@ -139,4 +140,71 @@ test('validateCommit: 브레이크인 후 재배열 허용', () => {
   const r = validateCommit({ turnStartBoard: startBoard, proposedBoard: proposed, rack, brokeIn: true });
   assert.equal(r.ok, true);
   assert.equal(r.newRack.length, 0);
+});
+
+// ---- 크래시 방어 / 형식 검증 ----
+test('isBoardShape: 잘못된 board 거부', () => {
+  assert.equal(isBoardShape([null]), false);
+  assert.equal(isBoardShape([{}]), false);
+  assert.equal(isBoardShape([{ tiles: 5 }]), false);
+  assert.equal(isBoardShape('x'), false);
+  assert.equal(isBoardShape([{ tiles: [{ color: 'red' }] }]), false); // id 없음
+  assert.equal(isBoardShape([{ tiles: [{ id: 'a', color: 'red', num: 3 }] }]), true);
+});
+
+test('validateCommit: 잘못된 board면 크래시 없이 거부', () => {
+  const rack = [T('a', 'red', 10)];
+  for (const bad of [[null], [{}], [{ tiles: 5 }], 'x', [{ tiles: [{ color: 'red' }] }]]) {
+    const r = validateCommit({ turnStartBoard: [], proposedBoard: bad, rack, brokeIn: true });
+    assert.equal(r.ok, false);
+  }
+});
+
+// ---- 치팅 차단: 클라 위조 값 무시하고 서버 원본으로 검증 ----
+test('validateCommit: 값 위조해도 원본으로 검증 (첫 등록 거부)', () => {
+  // 실제 손패 blue 3,4,5(런 12점) 을 red 11,12,13(36점)으로 위조
+  const rack = [T('r1', 'blue', 3), T('r2', 'blue', 4), T('r3', 'blue', 5)];
+  const forged = [
+    {
+      id: 'm1',
+      tiles: [
+        { id: 'r1', color: 'red', num: 11, joker: false },
+        { id: 'r2', color: 'red', num: 12, joker: false },
+        { id: 'r3', color: 'red', num: 13, joker: false },
+      ],
+    },
+  ];
+  const r = validateCommit({ turnStartBoard: [], proposedBoard: forged, rack, brokeIn: false });
+  assert.equal(r.ok, false); // 원본 blue3,4,5 = 12점 < 30
+});
+
+test('validateCommit: 위조 무시하고 원본 유효하면 원본 보드로 저장', () => {
+  const rack = [T('r1', 'red', 10), T('r2', 'blue', 10), T('r3', 'black', 10)]; // 그룹 30
+  const forged = [
+    {
+      id: 'm1',
+      tiles: [
+        { id: 'r1', color: 'orange', num: 1, joker: false }, // 위조
+        { id: 'r2', color: 'blue', num: 10, joker: false },
+        { id: 'r3', color: 'black', num: 10, joker: false },
+      ],
+    },
+  ];
+  const r = validateCommit({ turnStartBoard: [], proposedBoard: forged, rack, brokeIn: false });
+  assert.equal(r.ok, true);
+  assert.equal(r.board[0].tiles[0].color, 'red'); // 원본 값으로 저장
+  assert.equal(r.board[0].tiles[0].num, 10);
+});
+
+// ---- 조커 그룹/런 동시 유효 시 큰 값 ----
+test('meldValue: 조커로 그룹이자 런이면 큰 값 채택', () => {
+  assert.equal(meldValue([T('a', 'red', 9), J('j1'), J('j2')]), 30); // 그룹27/런30
+  assert.equal(meldValue([J('j1'), J('j2'), T('a', 'red', 10)]), 30); // 그룹30/런27
+});
+
+test('validateCommit: [red9,조커,조커] 런으로 첫 등록 30점 인정', () => {
+  const rack = [T('a', 'red', 9), J('j1'), J('j2')];
+  const proposed = [{ id: 'm1', tiles: rack }];
+  const r = validateCommit({ turnStartBoard: [], proposedBoard: proposed, rack, brokeIn: false });
+  assert.equal(r.ok, true);
 });

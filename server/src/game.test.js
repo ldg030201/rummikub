@@ -115,3 +115,45 @@ test('5인이면 2세트(212장) 사용', () => {
   assert.equal(room.game.setCount, 2);
   assert.equal(room.game.pool.length, 212 - 5 * 14);
 });
+
+// ---- 견고성/가드 ----
+test('start: 이미 진행 중이면 재시작 거부 (게임 리셋 방지)', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.start().ok, true);
+  assert.equal(room.start().ok, false); // 두 번째는 거부
+});
+
+test('draw/commit: 게임 종료 후에는 거부', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  const cur = room.currentPlayerId();
+  const rack = [T('a', 'red', 10), T('b', 'blue', 10), T('c', 'black', 10)];
+  room.game.racks[cur] = rack;
+  room.game.board = [];
+  room.game.turnStartBoard = [];
+  room.game.brokeIn[cur] = false;
+  room.commit(cur, [{ id: 'm1', tiles: rack }]); // 승리 → ended
+  assert.equal(room.phase, 'ended');
+  assert.equal(room.draw(cur).ok, false);
+  assert.equal(room.commit(cur, []).ok, false);
+});
+
+test('reattachByToken: 토큰으로만 좌석 복귀 (이름만으론 불가)', () => {
+  const room = twoPlayerRoom();
+  const p = room.players.get('p1');
+  p.connected = false; // 끊긴 상태
+  assert.equal(room.reattachByToken('wrong-token', sock()), null);
+  assert.equal(room.reattachByToken(p.reconnectToken, sock()), 'p1');
+  assert.equal(room.players.get('p1').connected, true);
+});
+
+test('updateDraft: 잘못된 board는 무시 (관전자 크래시 방지)', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  const cur = room.currentPlayerId();
+  assert.equal(room.updateDraft(cur, [null]).ok, false);
+  assert.equal(room.updateDraft(cur, 'x').ok, false);
+  assert.equal(room.game.draftBoard, null);
+  const good = [{ id: 'm1', tiles: [T('a', 'red', 3), T('b', 'red', 4), T('c', 'red', 5)] }];
+  assert.equal(room.updateDraft(cur, good).ok, true);
+});
