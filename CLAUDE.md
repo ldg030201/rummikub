@@ -47,7 +47,7 @@ rummikub/
 
 - **서버가 권위(authoritative)**: 클라는 조작을 제안하고, 서버가 룰 검증 후 모두에게 브로드캐스트. 클라가 보낸 타일의 `color/num/joker` 값은 **신뢰하지 않고** 서버가 tile `id`로 원본을 재구성해 검증한다(치팅 방지).
 - **실시간 draft**: 내 턴엔 로컬에서 타일을 옮기고(draft), 옮길 때마다 관전자에게 실시간 전송. **제출(commit)** 시 서버가 최종 검증. 형식이 깨진 board는 서버가 걸러 크래시/그리핑을 막는다.
-- **재접속**: 최초 join 시 서버가 비밀 `reconnectToken`을 발급 → 클라가 sessionStorage에 저장 → 새로고침/재연결 시 그 토큰으로만 좌석 복귀(이름만으론 불가). 미제출 draft와 턴은 **유예 타이머(45s)** 로 보존돼 새로고침해도 안 뺏긴다.
+- **재접속**: 최초 join 시 서버가 비밀 `reconnectToken` 발급 → 클라가 sessionStorage에 저장 → 새로고침/재연결 시 토큰으로 좌석 복귀. 토큰이 없으면(탭 닫고 재입장) **이름+방코드 일치 시 끊긴 좌석에 한해 복귀** 폴백. 미제출 draft와 턴은 **유예 타이머(45s)** 로 보존돼 새로고침해도 안 뺏긴다.
 - **방 정리**: 로비면 즉시, 진행/종료 중 빈 방은 5분 재접속 유예 후 GC.
 - **WS 메시지**: `join`(roomId,name,token) / `start` / `draw` / `draft`(board) / `commit`(board) / `newGame` / `leave`. 서버→클라: `joined`(playerId,token) / `state`(개인화) / `error` / `commitRejected`.
 

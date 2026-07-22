@@ -207,13 +207,14 @@ wss.on('connection', (ws) => {
         const room = getOrCreateRoom(roomId);
         clearRoomGC(room); // 방이 다시 활성화됨
 
-        // 재접속 토큰으로 좌석 복귀 우선 시도
+        // 재접속: 토큰 우선, 없으면 이름+방코드 일치로 끊긴 좌석 복귀
         let playerId = room.reattachByToken(token, ws);
+        if (!playerId) playerId = room.reattachByName(name, ws);
         if (!playerId) {
           if (room.phase !== 'lobby') {
             send(ws, {
               type: 'error',
-              message: '이미 게임이 진행 중인 방이야. (원래 쓰던 브라우저에서만 재접속 가능)',
+              message: '이미 게임이 진행 중인 방이야. (같은 이름으로 입장하면 재접속 돼)',
             });
             return;
           }

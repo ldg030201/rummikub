@@ -138,13 +138,25 @@ test('draw/commit: 게임 종료 후에는 거부', () => {
   assert.equal(room.commit(cur, []).ok, false);
 });
 
-test('reattachByToken: 토큰으로만 좌석 복귀 (이름만으론 불가)', () => {
+test('reattachByToken: 토큰으로 좌석 복귀', () => {
   const room = twoPlayerRoom();
   const p = room.players.get('p1');
   p.connected = false; // 끊긴 상태
   assert.equal(room.reattachByToken('wrong-token', sock()), null);
   assert.equal(room.reattachByToken(p.reconnectToken, sock()), 'p1');
   assert.equal(room.players.get('p1').connected, true);
+});
+
+test('reattachByName: 이름으로 끊긴 좌석만 복귀 (접속 중 좌석은 탈취 불가)', () => {
+  const room = twoPlayerRoom();
+  // 접속 중인 좌석은 이름이 같아도 복귀 불가
+  assert.equal(room.reattachByName('앨리스', sock()), null);
+  // 끊긴 뒤에는 이름으로 복귀 가능
+  room.players.get('p1').connected = false;
+  assert.equal(room.reattachByName('앨리스', sock()), 'p1');
+  assert.equal(room.players.get('p1').connected, true);
+  // 없는 이름은 불가
+  assert.equal(room.reattachByName('없는사람', sock()), null);
 });
 
 test('updateDraft: 잘못된 board는 무시 (관전자 크래시 방지)', () => {

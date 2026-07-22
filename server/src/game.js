@@ -72,6 +72,19 @@ export class Room {
     if (!this.order.includes(playerId)) this.order.push(playerId);
   }
 
+  // 이름으로 끊긴 좌석 복귀 (토큰이 없을 때 폴백 — 탭 닫고 다시 들어온 경우).
+  // 접속 중인 좌석은 탈취 못 하게 끊긴 좌석만 허용.
+  reattachByName(name, socket) {
+    for (const [pid, p] of this.players) {
+      if (p.name === name && !p.connected) {
+        p.connected = true;
+        p.socket = socket;
+        return pid;
+      }
+    }
+    return null;
+  }
+
   // 재접속 토큰으로 좌석 복귀. 성공하면 기존 playerId 반환.
   // 토큰이 일치하면 같은 사용자이므로, 옛 소켓이 남아있어도 새 소켓으로 교체(새로고침 대응).
   reattachByToken(token, socket) {
