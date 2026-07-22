@@ -309,7 +309,9 @@ export default function Game({ state, me, actions, reject, nudged }) {
       }
       const dx = fromLeft - r.left;
       const dy = fromTop - r.top;
-      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) continue;
+      // 호버 시 translateY(-4px) 들림이 이동으로 오판되면 타일이 계속 요동친다.
+      // 실제 이동(슬롯 한 칸 34px+)보다 훨씬 작은 8px 미만 변화는 무시.
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) continue;
       moves.push([el, dx, dy, r]);
     }
     prevRectsRef.current = next;
@@ -560,6 +562,18 @@ export default function Game({ state, me, actions, reject, nudged }) {
     setOverSlot(null);
     setDragGhostIds(null);
   };
+
+  // 안전망: 드롭으로 원본 노드가 사라지면 dragend가 그 노드에 안 올 수 있다.
+  // 어떤 경로로 드래그가 끝나든 창 수준에서 반투명을 확실히 해제.
+  useEffect(() => {
+    const clearGhost = () => setDragGhostIds(null);
+    window.addEventListener('dragend', clearGhost);
+    window.addEventListener('drop', clearGhost);
+    return () => {
+      window.removeEventListener('dragend', clearGhost);
+      window.removeEventListener('drop', clearGhost);
+    };
+  }, []);
 
   const handById = useMemo(() => new Map(myHand.map((t) => [t.id, t])), [myHand]);
 
