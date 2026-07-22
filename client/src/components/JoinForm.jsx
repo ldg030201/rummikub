@@ -11,7 +11,8 @@ export default function JoinForm({ onJoin, connected }) {
   };
 
   const randomRoom = () => {
-    const code = Array.from({ length: 4 }, () =>
+    // 6자 영숫자(혼동 문자 제외) — 무차별 열거 비용 ↑
+    const code = Array.from({ length: 6 }, () =>
       'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
     ).join('');
     setRoom(code);
