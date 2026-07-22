@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
 export default function JoinForm({ onJoin, connected }) {
-  const [name, setName] = useState(localStorage.getItem('rk_name') || '');
-  const [room, setRoom] = useState(localStorage.getItem('rk_room') || '');
+  const [name, setName] = useState(sessionStorage.getItem('rk_name') || '');
+  const [room, setRoom] = useState(sessionStorage.getItem('rk_room') || '');
 
   const submit = (e) => {
     e.preventDefault();

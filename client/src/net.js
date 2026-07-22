@@ -12,6 +12,31 @@ function wsUrl() {
   return `${proto}://${loc.host}/ws`;
 }
 
+// 세션 저장 (탭 단위 격리 — localStorage는 탭끼리 공유돼 세션이 꼬임)
+const ss = {
+  get: (k) => {
+    try {
+      return sessionStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set: (k, v) => {
+    try {
+      sessionStorage.setItem(k, v);
+    } catch {
+      /* noop */
+    }
+  },
+  del: (k) => {
+    try {
+      sessionStorage.removeItem(k);
+    } catch {
+      /* noop */
+    }
+  },
+};
+
 // 실시간 게임 연결 훅
 export function useRummikub() {
   const wsRef = useRef(null);
@@ -21,9 +46,10 @@ export function useRummikub() {
   const [error, setError] = useState(null); // { message, ts }
   const [reject, setReject] = useState(null); // { reason, invalidMeldId, ts }
 
-  const pending = useRef(null); // 연결 완료 전 보낼 join 정보
+  const pending = useRef(null); // 연결 완료 전 보낼 join 정보 { roomId, name, token }
   const reconnectTimer = useRef(null);
   const shouldReconnect = useRef(true);
+  const attempts = useRef(0); // 재연결 실패 횟수 (지수 백오프용)
 
   const rawSend = useCallback((obj) => {
     const ws = wsRef.current;
@@ -41,7 +67,7 @@ export function useRummikub() {
 
     ws.onopen = () => {
       setConnected(true);
-      // 재접속/최초접속 시 join 재전송
+      attempts.current = 0; // 성공 시 백오프 리셋
       if (pending.current) {
         ws.send(JSON.stringify({ type: 'join', ...pending.current }));
       }
@@ -56,6 +82,9 @@ export function useRummikub() {
       }
       switch (msg.type) {
         case 'joined':
+          // 재접속 토큰 저장 (다음 재연결/새로고침 때 좌석 복귀에 사용)
+          if (msg.token) ss.set('rk_token', msg.token);
+          pending.current = { roomId: msg.roomId, name: msg.name, token: msg.token };
           setMe({ playerId: msg.playerId, roomId: msg.roomId, name: msg.name });
           break;
         case 'state':
@@ -76,7 +105,11 @@ export function useRummikub() {
       setConnected(false);
       wsRef.current = null;
       if (shouldReconnect.current && pending.current) {
-        reconnectTimer.current = setTimeout(connect, 1200);
+        // 지수 백오프 + 지터 (동시 재연결 몰림 방지)
+        const n = attempts.current;
+        attempts.current = n + 1;
+        const delay = Math.min(1000 * 2 ** n, 30000) + Math.floor(Math.random() * 1000);
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
 
@@ -92,12 +125,13 @@ export function useRummikub() {
   useEffect(() => {
     shouldReconnect.current = true;
     connect();
-    // 저장된 세션 있으면 자동 재입장
-    const savedName = localStorage.getItem('rk_name');
-    const savedRoom = localStorage.getItem('rk_room');
-    const active = localStorage.getItem('rk_active') === '1';
+    // 저장된 세션 있으면 자동 재입장 (같은 탭 새로고침 복구)
+    const savedName = ss.get('rk_name');
+    const savedRoom = ss.get('rk_room');
+    const savedToken = ss.get('rk_token');
+    const active = ss.get('rk_active') === '1';
     if (active && savedName && savedRoom) {
-      pending.current = { roomId: savedRoom, name: savedName };
+      pending.current = { roomId: savedRoom, name: savedName, token: savedToken };
     }
     return () => {
       shouldReconnect.current = false;
@@ -110,11 +144,13 @@ export function useRummikub() {
     (roomId, name) => {
       const rid = roomId.trim().toUpperCase();
       const nm = name.trim();
-      pending.current = { roomId: rid, name: nm };
-      localStorage.setItem('rk_name', nm);
-      localStorage.setItem('rk_room', rid);
-      localStorage.setItem('rk_active', '1');
-      if (!rawSend({ type: 'join', roomId: rid, name: nm })) {
+      const token = ss.get('rk_token') || null; // 같은 좌석 복귀용(있으면)
+      pending.current = { roomId: rid, name: nm, token };
+      ss.set('rk_name', nm);
+      ss.set('rk_room', rid);
+      ss.set('rk_active', '1');
+      attempts.current = 0;
+      if (!rawSend({ type: 'join', roomId: rid, name: nm, token })) {
         connect();
       }
     },
@@ -128,8 +164,10 @@ export function useRummikub() {
   const newGame = useCallback(() => rawSend({ type: 'newGame' }), [rawSend]);
   const leave = useCallback(() => {
     rawSend({ type: 'leave' });
-    localStorage.removeItem('rk_active');
+    ss.del('rk_active');
+    ss.del('rk_token');
     pending.current = null;
+    attempts.current = 0;
     setMe(null);
     setState(null);
   }, [rawSend]);
