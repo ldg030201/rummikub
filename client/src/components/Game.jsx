@@ -203,32 +203,16 @@ export default function Game({ state, me, actions, reject }) {
 
   const currentPlayer = state.players.find((p) => p.id === state.currentPlayerId);
   const winner = state.players.find((p) => p.id === state.winnerId);
+  // 상대 좌석: 내 다음 차례부터 시계방향 순서로 배치 (실제 앉은 순서 느낌)
+  const myIdx = state.players.findIndex((p) => p.id === me.playerId);
+  const opponents =
+    myIdx >= 0
+      ? [...state.players.slice(myIdx + 1), ...state.players.slice(0, myIdx)]
+      : state.players.filter((p) => p.id !== me.playerId);
   const rejectMeldId = reject && Date.now() - reject.ts < 3000 ? reject.invalidMeldId : null;
 
   return (
     <div className="game">
-      {/* 상단: 상태 바 */}
-      <div className="status-bar">
-        <div className="players">
-          {state.players.map((p) => (
-            <div
-              key={p.id}
-              className={[
-                'pchip',
-                p.id === state.currentPlayerId ? 'turn' : '',
-                p.id === me.playerId ? 'me' : '',
-                p.connected ? '' : 'offline',
-              ].join(' ')}
-            >
-              <span className="pname">{p.name}</span>
-              <span className="pcount">🀫 {p.handCount}</span>
-              {p.brokeIn && <span className="mini-badge">등록</span>}
-            </div>
-          ))}
-        </div>
-        <div className="pool">남은 타일 {state.poolCount}</div>
-      </div>
-
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {ended ? (
           <b>게임 종료</b>
@@ -243,10 +227,40 @@ export default function Game({ state, me, actions, reject }) {
             <b className={initialSum >= 30 ? 'ok' : 'no'}>{initialSum ?? 0}</b> / 30
           </span>
         )}
+        <span className="pool-tag">남은 타일 {state.poolCount}</span>
       </div>
 
       {/* 테이블 (보드) */}
       <div className="table-area">
+        {/* 상대 플레이어 좌석 (테이블 건너편) */}
+        <div className="seats">
+          {opponents.map((p) => (
+            <div
+              key={p.id}
+              className={[
+                'seat',
+                p.id === state.currentPlayerId ? 'turn' : '',
+                p.connected ? '' : 'offline',
+              ].join(' ')}
+            >
+              <div className="seat-name">
+                {p.name}
+                {p.brokeIn && <span className="mini-badge">등록</span>}
+                {!p.connected && <span className="seat-off">연결 끊김</span>}
+              </div>
+              <div className="mini-hand">
+                <div className="mini-fan">
+                  {Array.from({ length: Math.min(p.handCount, 24) }, (_, i) => (
+                    <span key={i} className="mini-tile-back" />
+                  ))}
+                  {p.handCount > 24 && <span className="mini-more">…</span>}
+                </div>
+                <span className="seat-count">{p.handCount}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {board.length === 0 && <div className="empty-table">아직 놓인 조합이 없어</div>}
         <div className="melds">
           {board.map((m) => {
