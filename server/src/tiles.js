@@ -13,13 +13,13 @@ function nextId(prefix) {
 }
 
 // 한 벌(세트) 생성: 각 숫자/색 조합 2개씩 + 조커 2개
-function buildOneSet(setIndex) {
+function buildOneSet(setIndex, gameTag) {
   const tiles = [];
   for (let copy = 0; copy < 2; copy += 1) {
     for (const color of COLORS) {
       for (let num = MIN_NUM; num <= MAX_NUM; num += 1) {
         tiles.push({
-          id: nextId(`t${setIndex}_`),
+          id: nextId(`${gameTag}t${setIndex}_`),
           color,
           num,
           joker: false,
@@ -30,7 +30,7 @@ function buildOneSet(setIndex) {
   // 조커 2개
   for (let j = 0; j < 2; j += 1) {
     tiles.push({
-      id: nextId(`j${setIndex}_`),
+      id: nextId(`${gameTag}j${setIndex}_`),
       color: null,
       num: null,
       joker: true,
@@ -45,9 +45,12 @@ export function setCountForPlayers(playerCount) {
 }
 
 export function buildPool(setCount) {
+  // 게임마다 고유 태그: 서버 재시작으로 카운터가 리셋돼도 이전 판과 타일 id가 안 겹치게.
+  // (id가 겹치면 클라 localStorage의 옛 손패 배치가 새 게임 타일에 그대로 적용되는 버그)
+  const gameTag = `g${Math.random().toString(36).slice(2, 6)}_`;
   const tiles = [];
   for (let s = 0; s < setCount; s += 1) {
-    tiles.push(...buildOneSet(s));
+    tiles.push(...buildOneSet(s, gameTag));
   }
   return tiles;
 }
