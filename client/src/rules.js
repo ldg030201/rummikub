@@ -43,9 +43,10 @@ export function isValidMeld(tiles) {
 }
 
 export function meldValue(tiles) {
+  let best = 0;
   if (isGroup(tiles)) {
     const reals = tiles.filter((t) => !t.joker);
-    return reals[0].num * tiles.length;
+    best = Math.max(best, reals[0].num * tiles.length);
   }
   if (isRun(tiles)) {
     let start = null;
@@ -57,7 +58,7 @@ export function meldValue(tiles) {
     }
     let sum = 0;
     for (let i = 0; i < tiles.length; i += 1) sum += start + i;
-    return sum;
+    best = Math.max(best, sum);
   }
-  return 0;
+  return best;
 }
