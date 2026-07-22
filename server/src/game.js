@@ -55,6 +55,23 @@ export class Room {
     this.order = []; // 좌석 순서 (playerId[])
     this.phase = 'lobby';
     this.game = null;
+    this.chat = []; // { name, text, ts, system } 최근 200개
+  }
+
+  // 채팅 추가 (트림·200자 제한·최대 200개 유지). 빈 메시지는 null.
+  addChat(name, text, system = false, senderId = null) {
+    const t = String(text ?? '').trim().slice(0, 200);
+    if (!t) return null;
+    const entry = {
+      name: String(name ?? '').slice(0, 20),
+      text: t,
+      ts: Date.now(),
+      system,
+      senderId,
+    };
+    this.chat.push(entry);
+    if (this.chat.length > 200) this.chat.shift();
+    return entry;
   }
 
   isEmpty() {

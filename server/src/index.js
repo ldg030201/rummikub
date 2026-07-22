@@ -188,8 +188,8 @@ const MSG_WINDOW_MS = 2000; // 메시지 속도 제한 윈도우
 const MSG_PER_WINDOW = 80; // 윈도우당 최대 메시지 (drag/draft 고려해 넉넉히)
 const connsByIp = new Map();
 
-// ---- WebSocket ---- (payload 상한으로 대용량 프레임 거부)
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 256 * 1024 });
+// ---- WebSocket ---- (payload 상한으로 대용량 프레임 거부; 정상 board 커밋도 수십 KB면 충분)
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -397,7 +397,15 @@ wss.on('connection', (ws, req) => {
         if (!room) return;
         const seat = room.players.get(ctx.playerId);
         if (!seat) return;
-        broadcastChat(room, room.addChat(seat.name, msg.text));
+        // 채팅 속도 제한 (3초당 8건 초과분 드롭 — 스팸 방지)
+        const now = Date.now();
+        if (!seat._cWin || now - seat._cWin > 3000) {
+          seat._cWin = now;
+          seat._cN = 0;
+        }
+        seat._cN += 1;
+        if (seat._cN > 8) return;
+        broadcastChat(room, room.addChat(seat.name, msg.text, false, ctx.playerId));
         break;
       }
 

@@ -3,10 +3,11 @@ import { useRummikub } from './net.js';
 import JoinForm from './components/JoinForm.jsx';
 import WaitingRoom from './components/WaitingRoom.jsx';
 import Game from './components/Game.jsx';
+import Chat from './components/Chat.jsx';
 import Toast from './components/Toast.jsx';
 
 export default function App() {
-  const { connected, me, state, error, reject, actions } = useRummikub();
+  const { connected, me, state, error, reject, chat, actions } = useRummikub();
   const [toast, setToast] = useState(null);
 
   // 서버 에러/거부 메시지를 토스트로
@@ -41,11 +42,23 @@ export default function App() {
 
       <main className="main">
         {!joined && <JoinForm onJoin={actions.join} connected={connected} />}
-        {joined && state.phase === 'lobby' && (
-          <WaitingRoom state={state} me={me} onStart={actions.start} />
-        )}
-        {joined && (state.phase === 'playing' || state.phase === 'ended') && (
-          <Game state={state} me={me} actions={actions} reject={reject} />
+        {joined && (
+          <div className="layout">
+            <div className="content">
+              {state.phase === 'lobby' && (
+                <WaitingRoom state={state} me={me} onStart={actions.start} />
+              )}
+              {(state.phase === 'playing' || state.phase === 'ended') && (
+                <Game state={state} me={me} actions={actions} reject={reject} />
+              )}
+            </div>
+            <Chat
+              messages={chat}
+              onSend={actions.sendChat}
+              myId={me.playerId}
+              connected={connected}
+            />
+          </div>
         )}
       </main>
 

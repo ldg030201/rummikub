@@ -159,6 +159,21 @@ test('reattachByName: 이름으로 끊긴 좌석만 복귀 (접속 중 좌석은
   assert.equal(room.reattachByName('없는사람', sock()), null);
 });
 
+test('addChat: 트림·200자 제한·최대 200개 유지', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.addChat('앨리스', '   '), null);
+  assert.equal(room.addChat('앨리스', null), null);
+  const e = room.addChat('앨리스', '  안녕  ');
+  assert.equal(e.text, '안녕');
+  assert.equal(e.system, false);
+  const long = room.addChat('앨리스', 'a'.repeat(300));
+  assert.equal(long.text.length, 200);
+  const sys = room.addChat('', '게임 시작', true);
+  assert.equal(sys.system, true);
+  for (let i = 0; i < 250; i += 1) room.addChat('밥', `m${i}`);
+  assert.ok(room.chat.length <= 200);
+});
+
 test('updateDraft: 잘못된 board는 무시 (관전자 크래시 방지)', () => {
   const room = twoPlayerRoom();
   room.start();
