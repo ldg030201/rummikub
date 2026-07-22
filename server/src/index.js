@@ -27,6 +27,36 @@ function getOrCreateRoom(roomId) {
   return room;
 }
 
+const ROOM_GC_MS = 5 * 60 * 1000; // 진행 중이던 빈 방은 5분 재접속 유예 후 정리
+
+function clearRoomGC(room) {
+  if (room._gcTimer) {
+    clearTimeout(room._gcTimer);
+    room._gcTimer = null;
+  }
+}
+
+// 빈 방 정리: 로비면 즉시 삭제, 진행/종료 중이면 재접속 유예(GC) 후 삭제.
+// (진행 중 방을 즉시 지우면 잠깐 전원 끊길 때 게임/재접속이 영구 소실됨)
+function cleanupIfEmpty(room) {
+  if (!room.isEmpty()) {
+    clearRoomGC(room);
+    return;
+  }
+  if (room.phase === 'lobby') {
+    clearRoomGC(room);
+    rooms.delete(room.id);
+    return;
+  }
+  if (!room._gcTimer) {
+    room._gcTimer = setTimeout(() => {
+      room._gcTimer = null;
+      if (room.isEmpty()) rooms.delete(room.id);
+    }, ROOM_GC_MS);
+    room._gcTimer.unref?.();
+  }
+}
+
 // ---- 정적 파일 서빙 ----
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -108,24 +138,42 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
+    if (!msg || typeof msg !== 'object') return;
 
-    switch (msg.type) {
+    // 어떤 메시지 처리도 서버 전체를 죽이지 못하게 방어
+    try {
+      switch (msg.type) {
       case 'join': {
-        const roomId = String(msg.roomId || '').trim().toUpperCase();
+        const roomId = String(msg.roomId || '').trim().toUpperCase().slice(0, 12);
         const name = String(msg.name || '').trim().slice(0, 20);
+        const token = typeof msg.token === 'string' ? msg.token : null;
         if (!roomId || !name) {
           send(ws, { type: 'error', message: '방 코드와 이름을 입력해줘.' });
           return;
         }
-        const room = getOrCreateRoom(roomId);
 
-        // 진행 중인 게임이면 이름으로 재접속 시도
-        let playerId = room.reattachByName(name, ws);
+        // 같은 소켓이 다른 방으로 재-join하면 이전 방을 먼저 정리 (유령 방/좌석 누수 방지)
+        if (ctx.roomId && ctx.roomId !== roomId) {
+          const prev = rooms.get(ctx.roomId);
+          const prevP = prev?.players.get(ctx.playerId);
+          if (prev && prevP && prevP.socket === ws) {
+            prev.removeSocket(ctx.playerId);
+            if (prev.game && prev.currentPlayerId() === ctx.playerId) prev.advanceTurn();
+            broadcastRoom(prev);
+            cleanupIfEmpty(prev);
+          }
+        }
+
+        const room = getOrCreateRoom(roomId);
+        clearRoomGC(room); // 방이 다시 활성화됨
+
+        // 재접속 토큰으로 좌석 복귀 우선 시도
+        let playerId = room.reattachByToken(token, ws);
         if (!playerId) {
           if (room.phase !== 'lobby') {
             send(ws, {
               type: 'error',
-              message: '이미 게임이 진행 중인 방이야. (같은 이름으로만 재접속 가능)',
+              message: '이미 게임이 진행 중인 방이야. (원래 쓰던 브라우저에서만 재접속 가능)',
             });
             return;
           }
@@ -141,8 +189,15 @@ wss.on('connection', (ws) => {
           room.addPlayer(playerId, name, ws);
         }
 
+        const seat = room.players.get(playerId);
         ctx = { roomId, playerId };
-        send(ws, { type: 'joined', playerId, roomId, name });
+        send(ws, {
+          type: 'joined',
+          playerId,
+          roomId,
+          name: seat.name,
+          token: seat.reconnectToken,
+        });
         broadcastRoom(room);
         break;
       }
@@ -198,6 +253,11 @@ wss.on('connection', (ws) => {
       case 'newGame': {
         const room = rooms.get(ctx.roomId);
         if (!room) return;
+        // 진행 중인 게임을 아무나 날리지 못하게: 종료된 뒤에만 새 게임 허용
+        if (room.phase === 'playing') {
+          send(ws, { type: 'error', message: '게임 진행 중엔 새 게임을 시작할 수 없어.' });
+          return;
+        }
         room.resetToLobby();
         broadcastRoom(room);
         break;
@@ -207,14 +267,21 @@ wss.on('connection', (ws) => {
         const room = rooms.get(ctx.roomId);
         if (!room) return;
         room.removeSocket(ctx.playerId);
+        // close 핸들러와 동일하게: 나간 사람이 현재 턴이면 턴을 넘긴다 (데드락 방지)
+        if (room.game && room.currentPlayerId() === ctx.playerId) {
+          room.advanceTurn();
+        }
         broadcastRoom(room);
-        if (room.isEmpty()) rooms.delete(room.id);
+        cleanupIfEmpty(room);
         ctx = { roomId: null, playerId: null };
         break;
       }
 
       default:
         break;
+      }
+    } catch (err) {
+      console.error('메시지 처리 오류:', err?.message);
     }
   });
 
@@ -230,7 +297,7 @@ wss.on('connection', (ws) => {
       room.advanceTurn();
     }
     broadcastRoom(room);
-    if (room.isEmpty()) rooms.delete(room.id);
+    cleanupIfEmpty(room);
   });
 });
 
@@ -246,6 +313,14 @@ const interval = setInterval(() => {
   }
 }, 30000);
 wss.on('close', () => clearInterval(interval));
+
+// 최후의 방어선: 예기치 못한 예외로 프로세스가 죽어 모든 방이 날아가는 걸 막는다
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err?.stack || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+});
 
 server.listen(PORT, () => {
   console.log('');

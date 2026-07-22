@@ -1,6 +1,7 @@
 // 방(Room) + 게임 상태 관리
+import { randomUUID } from 'node:crypto';
 import { buildPool, shuffle, setCountForPlayers } from './tiles.js';
-import { validateCommit } from './rules.js';
+import { validateCommit, isBoardShape } from './rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
 
@@ -29,8 +30,9 @@ export function serializeState(room, forPlayerId) {
   if (room.game) {
     const g = room.game;
     const isMyTurn = g.order[g.currentIndex] === forPlayerId;
-    // 내 턴이 아니고 현재 턴 플레이어의 draft가 있으면 그 draft를 보여준다 (실시간 관전)
-    const board = !isMyTurn && g.draftBoard ? g.draftBoard : g.board;
+    // 현재 턴 플레이어의 draft가 있으면 그걸 보여준다.
+    // (관전자는 실시간 관전용, 현재 플레이어는 새로고침 후 미제출 배치 복원용)
+    const board = g.draftBoard ? g.draftBoard : g.board;
     Object.assign(base, {
       board,
       poolCount: g.pool.length,
@@ -60,14 +62,29 @@ export class Room {
   }
 
   addPlayer(playerId, name, socket) {
-    this.players.set(playerId, { id: playerId, name, connected: true, socket });
+    this.players.set(playerId, {
+      id: playerId,
+      name,
+      connected: true,
+      socket,
+      reconnectToken: randomUUID(), // 재접속용 비밀 토큰 (좌석 탈취 방지)
+    });
     if (!this.order.includes(playerId)) this.order.push(playerId);
   }
 
-  // 이름으로 끊긴 좌석 재접속 시도. 성공하면 기존 playerId 반환.
-  reattachByName(name, socket) {
+  // 재접속 토큰으로 좌석 복귀. 성공하면 기존 playerId 반환.
+  // 토큰이 일치하면 같은 사용자이므로, 옛 소켓이 남아있어도 새 소켓으로 교체(새로고침 대응).
+  reattachByToken(token, socket) {
+    if (!token) return null;
     for (const [pid, p] of this.players) {
-      if (p.name === name && !p.connected) {
+      if (p.reconnectToken === token) {
+        if (p.socket && p.socket !== socket) {
+          try {
+            p.socket.close();
+          } catch {
+            /* noop */
+          }
+        }
         p.connected = true;
         p.socket = socket;
         return pid;
@@ -94,6 +111,9 @@ export class Room {
 
   // 게임 시작 (로비에 있는 아무나 호출 가능)
   start() {
+    if (this.phase !== 'lobby') {
+      return { ok: false, reason: '이미 시작된 게임이야.' };
+    }
     const seated = this.order.filter((pid) => this.players.get(pid)?.connected);
     if (seated.length < 2) {
       return { ok: false, reason: '최소 2명이 있어야 시작할 수 있어.' };
@@ -153,7 +173,7 @@ export class Room {
   // 한 장 뽑기 (턴 종료). 풀이 비면 그냥 패스.
   draw(playerId) {
     const g = this.game;
-    if (!g || this.currentPlayerId() !== playerId) {
+    if (!g || this.phase !== 'playing' || this.currentPlayerId() !== playerId) {
       return { ok: false, reason: '네 턴이 아니야.' };
     }
     if (g.pool.length > 0) {
@@ -164,10 +184,11 @@ export class Room {
     return { ok: true };
   }
 
-  // 실시간 draft 갱신 (검증 X, 관전용)
+  // 실시간 draft 갱신 (룰 검증은 X지만, 형식은 검증해서 관전자 크래시 방지)
   updateDraft(playerId, board) {
     const g = this.game;
-    if (!g || this.currentPlayerId() !== playerId) return { ok: false };
+    if (!g || this.phase !== 'playing' || this.currentPlayerId() !== playerId) return { ok: false };
+    if (!isBoardShape(board)) return { ok: false };
     g.draftBoard = board;
     return { ok: true };
   }
@@ -175,7 +196,7 @@ export class Room {
   // 턴 커밋 (제출)
   commit(playerId, proposedBoard) {
     const g = this.game;
-    if (!g || this.currentPlayerId() !== playerId) {
+    if (!g || this.phase !== 'playing' || this.currentPlayerId() !== playerId) {
       return { ok: false, reason: '네 턴이 아니야.' };
     }
     const result = validateCommit({
@@ -186,8 +207,8 @@ export class Room {
     });
     if (!result.ok) return result;
 
-    // 적용
-    g.board = normalizeBoard(proposedBoard);
+    // 적용 (서버 권위 타일로 재구성된 보드를 저장)
+    g.board = result.board;
     g.racks[playerId] = result.newRack;
     g.brokeIn[playerId] = true;
     g.draftBoard = null;
@@ -212,11 +233,4 @@ export class Room {
 
 function deepClone(v) {
   return JSON.parse(JSON.stringify(v));
-}
-
-// 보드 정리: 빈 멜드 제거, 멜드 id 보장
-function normalizeBoard(board) {
-  return board
-    .filter((m) => m.tiles && m.tiles.length > 0)
-    .map((m, i) => ({ id: m.id ?? `m_${i}`, tiles: m.tiles }));
 }
