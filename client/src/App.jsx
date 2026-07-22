@@ -23,7 +23,9 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">🀄 루미큐브</div>
+        <div className="brand">
+          <span className="brand-tile">13</span> 루미큐브
+        </div>
         <div className="conn">
           <span className={`dot ${connected ? 'on' : 'off'}`} />
           {connected ? '연결됨' : '연결 중...'}

@@ -52,6 +52,24 @@ body {
 .brand {
   font-weight: 700;
   font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 브랜드 아이콘: 미니 루미큐브 타일 */
+.brand-tile {
+  width: 20px;
+  height: 26px;
+  border-radius: 4px;
+  background: linear-gradient(165deg, #faf5e8, var(--tile-face) 55%, #efe7d2);
+  border-bottom: 2px solid var(--tile-edge);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
 }
 .conn {
   font-size: 13px;
@@ -449,19 +467,24 @@ button:disabled {
   width: 15px;
   height: 21px;
   border-radius: 3px;
-  background: linear-gradient(150deg, #33415c, #1b2438);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-  margin-left: -9px;
+  /* 실제 루미큐브 타일 뒷면: 아이보리 (게임 타일 앞면과 같은 톤) */
+  background: linear-gradient(165deg, #faf5e8, var(--tile-face) 55%, #efe7d2);
+  border: 1px solid var(--tile-edge);
+  box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.4);
+  margin-left: -6px;
   position: relative;
 }
 .mini-tile-back::after {
-  /* 타일 뒷면 무늬 */
+  /* 타일 뒷면의 원형 홈 */
   content: '';
   position: absolute;
-  inset: 3px;
-  border-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  inset: 0;
+  margin: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #efe7d2, #d9cfb8);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.12);
 }
 .mini-tile-back:first-child {
   margin-left: 0;
