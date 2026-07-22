@@ -26,11 +26,14 @@ const TAB_ID = (() => {
   }
 })();
 
-// ---- 손패 슬롯(2줄) 배치 ----
+// ---- 손패 슬롯 배치 ----
 // rackPos = { [tileId]: { r, c } } — 클라이언트 로컬, localStorage에 저장돼 유지됨
-const RACK_ROWS = 2;
-const MIN_COLS = 14;
+// 열 수(cols)는 화면 폭에 맞춰 정하고, 넘치는 타일은 아랫줄로 이어진다(가로 스크롤 없음).
+// 그리드는 행 우선 1차원 인덱스로 다룬다: 밀림이 줄 끝에서 다음 줄로 자연스럽게 넘어감.
+const MAX_ROWS = 40; // 저장된 배치 검증용 상한
 const keyOf = (r, c) => `${r},${c}`;
+const posOf = (i, cols) => ({ r: Math.floor(i / cols), c: i % cols });
+const idxOf = (p, cols) => p.r * cols + p.c;
 
 function loadRackPos(storageKey) {
   try {
@@ -54,7 +57,7 @@ function saveRackPos(storageKey, pos) {
 }
 
 // 손패의 모든 타일이 유일한 슬롯을 갖도록 보정: 기존 위치 유지, 새 타일은 빈 슬롯, 없는 타일 제거
-function reconcilePos(pos, hand) {
+function reconcilePos(pos, hand, cols) {
   const next = {};
   const used = new Set();
   for (const t of hand) {
@@ -64,84 +67,82 @@ function reconcilePos(pos, hand) {
       Number.isInteger(p.r) &&
       Number.isInteger(p.c) &&
       p.r >= 0 &&
-      p.r < RACK_ROWS &&
+      p.r < MAX_ROWS &&
       p.c >= 0 &&
+      p.c < cols &&
       !used.has(keyOf(p.r, p.c))
     ) {
       next[t.id] = { r: p.r, c: p.c };
       used.add(keyOf(p.r, p.c));
     }
   }
-  // 새 타일(첫 배분/뽑기)은 기존 배치를 건드리지 않게 처리한다.
-  // 기존 배치가 있으면 최대 열 + 한 칸 띄우고 뒤에 이어붙이고(정렬 블럭 오염 방지),
+  // 새 타일(첫 배분/뽑기)은 기존 배치를 건드리지 않게, 마지막 타일 뒤 한 칸 띄우고 이어붙인다.
   // 아무 배치도 없으면(첫 배분) 앞에서부터 촘촘히 채운다.
   const newTiles = hand.filter((t) => !next[t.id]);
   if (newTiles.length) {
     const hasExisting = Object.keys(next).length > 0;
-    let maxC = -1;
-    for (const id in next) if (next[id].c > maxC) maxC = next[id].c;
-    let c = hasExisting ? maxC + 2 : 0;
-    let r = 0;
+    let maxIdx = -1;
+    for (const id in next) {
+      const i = idxOf(next[id], cols);
+      if (i > maxIdx) maxIdx = i;
+    }
+    let i = hasExisting ? maxIdx + 2 : 0;
     for (const t of newTiles) {
-      while (used.has(keyOf(r, c))) {
-        r += 1;
-        if (r >= RACK_ROWS) {
-          r = 0;
-          c += 1;
-        }
+      let p = posOf(i, cols);
+      while (used.has(keyOf(p.r, p.c))) {
+        i += 1;
+        p = posOf(i, cols);
       }
-      next[t.id] = { r, c };
-      used.add(keyOf(r, c));
-      r += 1;
-      if (r >= RACK_ROWS) {
-        r = 0;
-        c += 1;
-      }
+      next[t.id] = p;
+      used.add(keyOf(p.r, p.c));
+      i += 1;
     }
   }
   return next;
 }
 
-// 단일 타일을 슬롯에 놓기. 자리에 타일이 있으면 그 줄 오른쪽으로 한 칸씩 민다.
-function placeAt(pos, tileId, r, c) {
+// 단일 타일을 슬롯에 놓기. 자리에 타일이 있으면 뒤로 한 칸씩 민다 (줄 끝이면 다음 줄로).
+function placeAt(pos, tileId, r, c, cols) {
   const occupied = new Map();
   for (const [id, p] of Object.entries(pos)) {
-    if (id !== tileId) occupied.set(keyOf(p.r, p.c), id);
+    if (id !== tileId) occupied.set(idxOf(p, cols), id);
   }
   const next = { ...pos };
-  if (!occupied.has(keyOf(r, c))) {
+  const target = r * cols + c;
+  if (!occupied.has(target)) {
     next[tileId] = { r, c };
     return next;
   }
-  let free = c + 1;
-  while (occupied.has(keyOf(r, free))) free += 1;
-  for (let cc = free - 1; cc >= c; cc -= 1) {
-    const id = occupied.get(keyOf(r, cc));
-    if (id) next[id] = { r, c: cc + 1 };
+  let free = target + 1;
+  while (occupied.has(free)) free += 1;
+  for (let i = free - 1; i >= target; i -= 1) {
+    const id = occupied.get(i);
+    if (id) next[id] = posOf(i + 1, cols);
   }
   next[tileId] = { r, c };
   return next;
 }
 
 // 블럭(타일 여러 개)을 순서 유지한 채 (r,c)에 놓기.
-// placeAt과 동일하게, 그 줄에서 c 이상에 있던 다른 타일들을 블럭 길이만큼 오른쪽으로 민다.
-function placeBlockAt(pos, ids, r, c) {
+// 삽입 지점 이후의 타일들을 블럭 길이만큼 뒤로 민다 (텍스트 삽입과 같은 규칙).
+function placeBlockAt(pos, ids, r, c, cols) {
   const idSet = new Set(ids);
   const len = ids.length;
+  const start = r * cols + c;
   const next = {};
   for (const [id, p] of Object.entries(pos)) {
     if (idSet.has(id)) continue;
-    if (p.r === r && p.c >= c) next[id] = { r, c: p.c + len };
-    else next[id] = { r: p.r, c: p.c };
+    const i = idxOf(p, cols);
+    next[id] = i >= start ? posOf(i + len, cols) : { r: p.r, c: p.c };
   }
-  ids.forEach((id, i) => {
-    next[id] = { r, c: c + i };
+  ids.forEach((id, k) => {
+    next[id] = posOf(start + k, cols);
   });
   return next;
 }
 
 // 블럭 단위 정렬: 색깔순(런 준비) 또는 숫자순(그룹 준비). 블럭 사이 한 칸 띄움.
-function buildSortedPos(hand, mode) {
+function buildSortedPos(hand, mode, cols) {
   const jokers = hand.filter((t) => t.joker);
   const reals = hand.filter((t) => !t.joker);
   const blocks = [];
@@ -165,41 +166,33 @@ function buildSortedPos(hand, mode) {
   }
   if (jokers.length) blocks.push(jokers);
 
-  // 2줄에 배치: 블럭이 줄 끝에 안 들어가면 다음 줄로 (사이 한 칸 띄움)
-  const totalUnits = blocks.reduce((s, b) => s + b.length + 1, 0);
-  let cols = Math.max(MIN_COLS, Math.ceil(totalUnits / RACK_ROWS));
-  for (const b of blocks) if (b.length > cols) cols = b.length;
-
+  // 블럭이 이 줄에 안 들어가면 다음 줄로 (한 줄보다 긴 블럭은 그냥 이어붙여 줄바꿈)
   const pos = {};
-  let r = 0;
-  let c = 0;
+  let i = 0;
   for (const b of blocks) {
-    if (c > 0 && c + b.length > cols && r < RACK_ROWS - 1) {
-      r += 1;
-      c = 0;
-    }
+    const col = i % cols;
+    if (col > 0 && col + b.length > cols && b.length <= cols) i += cols - col;
     for (const t of b) {
-      pos[t.id] = { r, c };
-      c += 1;
+      pos[t.id] = posOf(i, cols);
+      i += 1;
     }
-    c += 1; // 블럭 사이 한 칸
+    i += 1; // 블럭 사이 한 칸
   }
   return pos;
 }
 
-// 모으기: 현재 순서(줄 우선) 유지한 채 빈 칸 없이 두 줄에 균등 배치
-function buildCompactPos(hand, pos) {
+// 모으기: 현재 순서(줄 우선) 유지한 채 빈 칸 없이 앞에서부터 채움
+function buildCompactPos(hand, pos, cols) {
   const ordered = hand
     .slice()
     .sort((a, b) => {
-      const pa = pos[a.id] || { r: 9, c: 9999 };
-      const pb = pos[b.id] || { r: 9, c: 9999 };
+      const pa = pos[a.id] || { r: 99, c: 9999 };
+      const pb = pos[b.id] || { r: 99, c: 9999 };
       return pa.r - pb.r || pa.c - pb.c;
     });
-  const cols = Math.max(MIN_COLS, Math.ceil(ordered.length / RACK_ROWS));
   const next = {};
   ordered.forEach((t, i) => {
-    next[t.id] = { r: Math.floor(i / cols), c: i % cols };
+    next[t.id] = posOf(i, cols);
   });
   return next;
 }
@@ -226,6 +219,26 @@ function extractFromBoard(board, tileId) {
     }
   }
   return null;
+}
+
+// 타일 뒷면 하나를 from→to로 날린다 (상대가 더미에서 뽑는 연출)
+function flyTileBack(from, to) {
+  const el = document.createElement('div');
+  el.className = 'tile-back-fly';
+  const w = 26;
+  const h = 34;
+  el.style.cssText =
+    `position:fixed;z-index:40;pointer-events:none;width:${w}px;height:${h}px;` +
+    `left:${from.left + from.width / 2 - w / 2}px;top:${from.top + from.height / 2 - h / 2}px;` +
+    'transition:none;transform:none';
+  document.body.appendChild(el);
+  void el.offsetWidth;
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+  const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+  el.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.35s ease';
+  el.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
+  el.style.opacity = '0.6';
+  setTimeout(() => el.remove(), 380);
 }
 
 export default function Game({ state, me, actions, reject, nudged }) {
@@ -350,6 +363,31 @@ export default function Game({ state, me, actions, reject, nudged }) {
     }
   });
 
+  // 상대 손패가 늘면(뽑기·시간초과 자동 뽑기) 더미→그 좌석으로 타일 뒷면 비행 연출
+  const prevHandCountsRef = useRef(null);
+  useEffect(() => {
+    if (!playing) {
+      prevHandCountsRef.current = null;
+      return;
+    }
+    const prev = prevHandCountsRef.current;
+    const next = {};
+    for (const p of state.players) next[p.id] = p.handCount;
+    prevHandCountsRef.current = next;
+    if (!prev) return; // 첫 상태(입장/재접속)엔 연출 없음
+    const root = rootRef.current;
+    const src = root?.querySelector('.pool-stack');
+    if (!src) return;
+    for (const p of state.players) {
+      if (p.id === me.playerId) continue; // 내 뽑기는 손패 비행으로 이미 보임
+      const before = prev[p.id];
+      if (before != null && p.handCount > before) {
+        const seat = root.querySelector(`[data-seatid="${p.id}"] .mini-fan`);
+        if (seat) flyTileBack(src.getBoundingClientRect(), seat.getBoundingClientRect());
+      }
+    }
+  }, [playing, state, me.playerId]);
+
   // 재촉받으면 화면 테두리 펄스 (서버가 턴 플레이어에게만 보냄)
   const [nudgeFx, setNudgeFx] = useState(null);
   useEffect(() => {
@@ -376,10 +414,28 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const [rackPos, setRackPos] = useState(() => loadRackPos(storageKey));
   const handKey = useMemo(() => myHand.map((t) => t.id).sort().join(','), [myHand]);
 
+  // 열 수를 컨테이너 폭에 맞춘다 (가로 스크롤 대신 아랫줄로 넘김 + 세로 스크롤)
+  const rackScrollRef = useRef(null);
+  const [rackCols, setRackCols] = useState(14);
   useEffect(() => {
-    setRackPos((p) => reconcilePos(p, myHand));
+    const el = rackScrollRef.current;
+    if (!el) return undefined;
+    const compute = () => {
+      const slotW = parseFloat(getComputedStyle(el).getPropertyValue('--slot-w')) || 46;
+      const gap = window.matchMedia('(max-width: 620px)').matches ? 3 : 5;
+      const inner = el.clientWidth - 16; // rack-grid 좌우 패딩
+      setRackCols(Math.max(4, Math.floor((inner + gap) / (slotW + gap))));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setRackPos((p) => reconcilePos(p, myHand, rackCols));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handKey]);
+  }, [handKey, rackCols]);
 
   useEffect(() => {
     saveRackPos(storageKey, rackPos);
@@ -433,11 +489,12 @@ export default function Game({ state, me, actions, reject, nudged }) {
     return m;
   }, [visibleRack, rackPos]);
 
-  const colsRendered = useMemo(() => {
-    let max = MIN_COLS;
+  // 표시할 줄 수: 타일이 들어있는 마지막 줄까지 (최소 2줄)
+  const rackRows = useMemo(() => {
+    let max = 2;
     for (const t of myHand) {
       const p = rackPos[t.id];
-      if (p && p.c + 2 > max) max = p.c + 2;
+      if (p && p.r + 1 > max) max = p.r + 1;
     }
     return max;
   }, [myHand, rackPos]);
@@ -445,9 +502,9 @@ export default function Game({ state, me, actions, reject, nudged }) {
   // 손패 블럭 (줄에서 붙어있는 타일 묶음) — 블럭 드래그 + 유효 조합 하이라이트
   const rackBlocks = useMemo(() => {
     const blocks = [];
-    for (let r = 0; r < RACK_ROWS; r += 1) {
+    for (let r = 0; r < rackRows; r += 1) {
       let run = [];
-      for (let c = 0; c <= colsRendered; c += 1) {
+      for (let c = 0; c <= rackCols; c += 1) {
         const t = grid.get(keyOf(r, c));
         if (t) run.push(t);
         else {
@@ -458,7 +515,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
       if (run.length) blocks.push(run);
     }
     return blocks;
-  }, [grid, colsRendered]);
+  }, [grid, rackRows, rackCols]);
 
   const readyIds = useMemo(() => {
     const s = new Set();
@@ -564,14 +621,18 @@ export default function Game({ state, me, actions, reject, nudged }) {
   };
 
   // 안전망: 드롭으로 원본 노드가 사라지면 dragend가 그 노드에 안 올 수 있다.
-  // 어떤 경로로 드래그가 끝나든 창 수준에서 반투명을 확실히 해제.
+  // 어떤 경로로 드래그가 끝나든 창 수준에서 반투명·하이라이트를 확실히 해제.
   useEffect(() => {
-    const clearGhost = () => setDragGhostIds(null);
-    window.addEventListener('dragend', clearGhost);
-    window.addEventListener('drop', clearGhost);
+    const clearDragFx = () => {
+      setDragGhostIds(null);
+      setOverSlot(null);
+      setOverTarget(null);
+    };
+    window.addEventListener('dragend', clearDragFx);
+    window.addEventListener('drop', clearDragFx);
     return () => {
-      window.removeEventListener('dragend', clearGhost);
-      window.removeEventListener('drop', clearGhost);
+      window.removeEventListener('dragend', clearDragFx);
+      window.removeEventListener('drop', clearDragFx);
     };
   }, []);
 
@@ -598,11 +659,11 @@ export default function Game({ state, me, actions, reject, nudged }) {
         const t = extractFromBoard(d, id);
         return t ? true : false;
       });
-      setRackPos((p) => placeAt(p, id, r, c));
+      setRackPos((p) => placeAt(p, id, r, c, rackCols));
     } else if (drag.ids.length > 1) {
-      setRackPos((p) => placeBlockAt(p, drag.ids, r, c));
+      setRackPos((p) => placeBlockAt(p, drag.ids, r, c, rackCols));
     } else {
-      setRackPos((p) => placeAt(p, drag.ids[0], r, c));
+      setRackPos((p) => placeAt(p, drag.ids[0], r, c, rackCols));
     }
   };
 
@@ -637,6 +698,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const dropIntoMeld = (e, meldId) => {
     e.preventDefault();
     setOverTarget(null);
+    setOverSlot(null); // 드래그 시작 슬롯의 하이라이트 잔상 제거
     const drag = dragRef.current;
     dragRef.current = null;
     setDragGhostIds(null);
@@ -675,6 +737,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const dropIntoNewMeld = (e) => {
     e.preventDefault();
     setOverTarget(null);
+    setOverSlot(null);
     const drag = dragRef.current;
     dragRef.current = null;
     setDragGhostIds(null);
@@ -703,8 +766,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
     actions.sendDraft(clone(base));
   };
   // 정렬/모으기는 보이는 타일만 배치 (보드에 올린 숨김 타일이 슬롯을 예약해 구멍 남는 것 방지)
-  const sortRack = (mode) => setRackPos(buildSortedPos(visibleRack, mode));
-  const compactRack = () => setRackPos((p) => buildCompactPos(visibleRack, p));
+  const sortRack = (mode) => setRackPos(buildSortedPos(visibleRack, mode, rackCols));
+  const compactRack = () => setRackPos((p) => buildCompactPos(visibleRack, p, rackCols));
 
   const currentPlayer = state.players.find((p) => p.id === state.currentPlayerId);
   const winner = state.players.find((p) => p.id === state.winnerId);
@@ -865,17 +928,20 @@ export default function Game({ state, me, actions, reject, nudged }) {
             </button>
           </div>
         </div>
-        <div className="rack-scroll">
+        <div className="rack-scroll" ref={rackScrollRef}>
           <div
             className="rack-grid"
-            style={{ gridTemplateColumns: `repeat(${colsRendered}, var(--slot-w))` }}
+            style={{
+              gridTemplateColumns: `repeat(${rackCols}, var(--slot-w))`,
+              gridTemplateRows: `repeat(${rackRows}, var(--slot-h))`,
+            }}
             onDragOver={(e) => {
               if (canDropOnRack()) e.preventDefault(); // 데드존에서도 드롭 허용(그리드가 위임)
             }}
             onDrop={dropOnGrid}
           >
-            {Array.from({ length: RACK_ROWS }).map((_, r) =>
-              Array.from({ length: colsRendered }).map((_, c) => {
+            {Array.from({ length: rackRows }).map((_, r) =>
+              Array.from({ length: rackCols }).map((_, c) => {
                 const k = keyOf(r, c);
                 const t = grid.get(k);
                 return (

@@ -499,6 +499,14 @@ button:disabled {
   transform: translateY(-3px);
 }
 
+/* 상대가 뽑을 때 더미→좌석으로 날아가는 타일 뒷면 */
+.tile-back-fly {
+  border-radius: 5px;
+  background: linear-gradient(165deg, #faf5e8, var(--tile-face) 55%, #efe7d2);
+  border: 1px solid var(--tile-edge);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
 /* 상대 플레이어 좌석 (테이블 위) */
 .seats {
   display: flex;
@@ -830,12 +838,14 @@ button:disabled {
   gap: 6px;
 }
 .rack-scroll {
-  overflow-x: auto;
+  /* 가로 스크롤 없음: 열 수를 폭에 맞추고, 3줄 넘게 쌓이면 세로 스크롤 */
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: calc(3 * var(--slot-h) + 34px);
   padding-bottom: 2px;
 }
 .rack-grid {
   display: grid;
-  grid-template-rows: repeat(2, var(--slot-h));
   gap: 5px;
   width: max-content;
   min-width: 100%;
