@@ -310,33 +310,41 @@ export default function Game({ state, me, actions, reject, nudged }) {
       const dx = fromLeft - r.left;
       const dy = fromTop - r.top;
       if (Math.abs(dx) < 4 && Math.abs(dy) < 4) continue;
-      moves.push([el, dx, dy]);
+      moves.push([el, dx, dy, r]);
     }
     prevRectsRef.current = next;
 
+    // 비행은 body 위 fixed 클론으로 한다. 제자리 transform 방식은
+    // 손패의 overflow 클리핑에 잘리고(뽑기 비행이 안 보임), 원소 스타일 복원이
+    // tile-in 애니메이션을 재시작시켜 깜빡임을 만들었음.
     if (moves.length) {
-      for (const [el, dx, dy] of moves) {
+      const flights = [];
+      for (const [el, dx, dy, r] of moves) {
         el._flying = true;
-        el.style.transition = 'none';
-        el.style.animation = 'none'; // tile-in 애니메이션과 transform 충돌 방지
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
-        el.style.zIndex = '5';
+        const c = el.cloneNode(true);
+        c.style.cssText =
+          `position:fixed;left:${r.left}px;top:${r.top}px;` +
+          `width:${r.width}px;height:${r.height}px;margin:0;z-index:40;` +
+          `pointer-events:none;transition:none;animation:none;` +
+          `transform:translate(${dx}px,${dy}px)`;
+        document.body.appendChild(c);
+        el.style.visibility = 'hidden'; // 도착지 실물은 비행 동안 숨김
+        flights.push([el, c]);
       }
       // 강제 리플로우로 시작 위치를 확정한 뒤 같은 틱에 전환 시작.
       // (rAF는 백그라운드 탭에서 멈춰 타일이 출발 위치에 굳을 수 있음)
-      void root.offsetWidth;
-      for (const [el] of moves) {
-        el.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1)';
-        el.style.transform = '';
+      void document.body.offsetWidth;
+      for (const [, c] of flights) {
+        c.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1)';
+        c.style.transform = '';
       }
       setTimeout(() => {
-        for (const [el] of moves) {
+        for (const [el, c] of flights) {
+          c.remove();
           el._flying = false;
-          el.style.transition = '';
-          el.style.animation = '';
-          el.style.zIndex = '';
+          el.style.visibility = '';
         }
-      }, 330);
+      }, 310);
     }
   });
 
@@ -563,6 +571,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     setOverTarget(null);
     const drag = dragRef.current;
     dragRef.current = null;
+    setDragGhostIds(null); // 드롭으로 원본 노드가 사라지면 dragend가 안 와서 여기서 해제
     if (!drag) return;
     skipFlipRef.current = new Set(drag.ids);
 
@@ -616,6 +625,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     setOverTarget(null);
     const drag = dragRef.current;
     dragRef.current = null;
+    setDragGhostIds(null);
     if (!drag || !isMyTurn || !draftBoard) return;
     skipFlipRef.current = new Set(drag.ids);
     const anchor = getDropAnchor(e.currentTarget, e.clientX);
@@ -653,6 +663,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     setOverTarget(null);
     const drag = dragRef.current;
     dragRef.current = null;
+    setDragGhostIds(null);
     if (!drag || !isMyTurn || !draftBoard) return;
     skipFlipRef.current = new Set(drag.ids);
     applyDraft((d) => {
