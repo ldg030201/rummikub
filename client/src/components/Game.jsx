@@ -254,7 +254,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     // 리마운트 시 이전 게임의 낡은 재촉으로 번쩍이지 않게 3초 이내 것만
     if (!nudged || Date.now() - nudged.ts > 3000) return undefined;
     setNudgeFx(nudged.ts);
-    const t = setTimeout(() => setNudgeFx(null), 1800);
+    const t = setTimeout(() => setNudgeFx(null), 1300);
     return () => clearTimeout(t);
   }, [nudged]);
 
