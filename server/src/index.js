@@ -206,14 +206,22 @@ function serveStatic(req, res) {
               '(개발 중이라면 Vite 개발 서버 http://localhost:5173 로 접속)'
           );
         } else {
-          writeHead(res, 200, { 'Content-Type': MIME['.html'] });
+          writeHead(res, 200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
           res.end(indexData);
         }
       });
       return;
     }
     const ext = path.extname(filePath);
-    writeHead(res, 200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    // 캐시 정책: 해시 붙은 Vite 에셋(/assets/)은 영구 캐시, 그 외(index.html 등)는 매번 재검증.
+    // (헤더가 없으면 브라우저가 휴리스틱 캐시를 써서 새 빌드가 반영 안 되는 문제가 있었음)
+    const cache = urlPath.startsWith('/assets/')
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache';
+    writeHead(res, 200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': cache,
+    });
     res.end(data);
   });
 }
