@@ -396,6 +396,38 @@ export default function Game({ state, me, actions, reject, nudged }) {
   };
 
   // ---- DnD ----
+  const [dragGhostIds, setDragGhostIds] = useState(null); // 드래그 중인 타일들 (원자리 반투명)
+
+  // 블럭 드래그 시 브라우저 기본 스냅샷(타일 1장) 대신 블럭 전체 모양의 드래그 이미지 사용
+  const setBlockDragImage = (e, ids) => {
+    const els = ids
+      .map((id) => document.querySelector(`.rack-grid [data-tileid="${CSS.escape(id)}"]`))
+      .filter(Boolean);
+    if (els.length < 2) return;
+    const rects = els.map((el) => el.getBoundingClientRect());
+    const base = rects[0];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;top:-500px;left:0;pointer-events:none;';
+    wrap.style.width = `${rects[rects.length - 1].right - base.left}px`;
+    wrap.style.height = `${base.height}px`;
+    els.forEach((el, i) => {
+      const c = el.cloneNode(true);
+      c.style.position = 'absolute';
+      c.style.left = `${rects[i].left - base.left}px`;
+      c.style.top = `${rects[i].top - base.top}px`;
+      c.style.margin = '0';
+      c.style.animation = 'none'; // tile-in 첫 프레임(투명)으로 스냅샷 찍히는 것 방지
+      wrap.appendChild(c);
+    });
+    document.body.appendChild(wrap);
+    try {
+      e.dataTransfer.setDragImage(wrap, e.clientX - base.left, e.clientY - base.top);
+    } catch {
+      /* noop */
+    }
+    setTimeout(() => wrap.remove(), 0); // 스냅샷은 dragstart 시점에 찍히므로 바로 제거 가능
+  };
+
   const onDragStartRack = (e, tile) => {
     let ids = [tile.id];
     if (e.shiftKey) {
@@ -409,6 +441,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
     } catch {
       /* noop */
     }
+    if (ids.length > 1) setBlockDragImage(e, ids);
+    setDragGhostIds(new Set(ids));
   };
   const onDragStartBoard = (e, tile) => {
     dragRef.current = { ids: [tile.id], from: 'board' };
@@ -418,11 +452,13 @@ export default function Game({ state, me, actions, reject, nudged }) {
     } catch {
       /* noop */
     }
+    setDragGhostIds(new Set([tile.id]));
   };
   const onDragEnd = () => {
     dragRef.current = null;
     setOverTarget(null);
     setOverSlot(null);
+    setDragGhostIds(null);
   };
 
   const handById = useMemo(() => new Map(myHand.map((t) => [t.id, t])), [myHand]);
@@ -645,6 +681,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
                     draggable={isMyTurn}
                     onDragStart={onDragStartBoard}
                     onDragEnd={onDragEnd}
+                    ghost={dragGhostIds?.has(t.id)}
                   />
                 ))}
               </div>
@@ -720,6 +757,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
                         onDragStart={onDragStartRack}
                         onDragEnd={onDragEnd}
                         ready={readyIds.has(t.id)}
+                        ghost={dragGhostIds?.has(t.id)}
                       />
                     )}
                   </div>
