@@ -44,6 +44,7 @@ function cleanupIfEmpty(room) {
     return;
   }
   clearTurnSkip(room);
+  clearTurnTimer(room); // 빈 방에서 타이머 회전 방지 (deadline은 유지돼 재접속 시 이어감)
   if (room.phase === 'lobby') {
     clearRoomGC(room);
     rooms.delete(room.id);
@@ -91,10 +92,48 @@ function syncTurnSkip(room) {
   }
 }
 
-// 상태 전파 + 턴 넘김 타이머 동기화 (턴/접속이 바뀔 때마다 호출)
+// ---- 턴 제한시간 ----
+// game.turnDeadline(마감시각) 기준으로 만료 타이머를 건다. deadline이 안 바뀌었으면
+// 기존 타이머 유지(draft 갱신마다 리셋되지 않게). 만료 시 자동 한 장 뽑기 + 턴 넘김.
+function clearTurnTimer(room) {
+  if (room._turnTimer) {
+    clearTimeout(room._turnTimer);
+    room._turnTimer = null;
+  }
+}
+
+function syncTurnTimer(room) {
+  const g = room.game;
+  if (!g || room.phase !== 'playing' || !g.turnDeadline) {
+    clearTurnTimer(room);
+    return;
+  }
+  if (room._turnTimer && room._turnTimerDeadline === g.turnDeadline) return;
+  clearTurnTimer(room);
+  room._turnTimerDeadline = g.turnDeadline;
+  room._turnTimer = setTimeout(() => {
+    room._turnTimer = null;
+    const g2 = room.game;
+    if (!g2 || room.phase !== 'playing') return;
+    if (Date.now() < g2.turnDeadline) {
+      // 그 사이 턴이 바뀌어 deadline이 갱신됨 → 새 deadline으로 재예약
+      syncTurnTimer(room);
+      return;
+    }
+    const pid = room.currentPlayerId();
+    const name = room.players.get(pid)?.name ?? '누군가';
+    room.timeoutTurn();
+    sysChat(room, `⏰ ${name}님 시간 초과! 한 장 뽑고 턴이 넘어갔어`);
+    pushState(room);
+  }, Math.max(0, g.turnDeadline - Date.now()) + 50);
+  room._turnTimer.unref?.();
+}
+
+// 상태 전파 + 턴 넘김/제한시간 타이머 동기화 (턴/접속이 바뀔 때마다 호출)
 function pushState(room) {
   broadcastRoom(room);
   syncTurnSkip(room);
+  syncTurnTimer(room);
 }
 
 // 채팅 한 건을 방 전체에 전송
@@ -406,6 +445,26 @@ wss.on('connection', (ws, req) => {
         seat._cN += 1;
         if (seat._cN > 8) return;
         broadcastChat(room, room.addChat(seat.name, msg.text, false, ctx.playerId));
+        break;
+      }
+
+      case 'nudge': {
+        const room = rooms.get(ctx.roomId);
+        if (!room || room.phase !== 'playing' || !room.game) return;
+        const seat = room.players.get(ctx.playerId);
+        if (!seat) return;
+        const curId = room.currentPlayerId();
+        if (curId === ctx.playerId) return; // 자기 턴엔 재촉 불가
+        // 5초 쿨타임 (플레이어별)
+        const now = Date.now();
+        if (seat._nudgeTs && now - seat._nudgeTs < 5000) return;
+        seat._nudgeTs = now;
+        const target = room.players.get(curId);
+        sysChat(room, `👉 ${seat.name}님이 ${target?.name ?? '현재 턴'}님을 재촉했어!`);
+        // 턴 플레이어에게만 화면 테두리 알림 이벤트
+        if (target?.connected && target.socket) {
+          send(target.socket, { type: 'nudged', from: seat.name, ts: now });
+        }
         break;
       }
 

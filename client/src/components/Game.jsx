@@ -228,10 +228,35 @@ function extractFromBoard(board, tileId) {
   return null;
 }
 
-export default function Game({ state, me, actions, reject }) {
+export default function Game({ state, me, actions, reject, nudged }) {
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
+
+  // ---- 턴 제한시간 카운트다운 ----
+  // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정)
+  const deadlineLocal = useMemo(() => {
+    if (!playing || !state.turnDeadline || !state.serverNow) return null;
+    return Date.now() + (state.turnDeadline - state.serverNow);
+  }, [playing, state.turnDeadline, state.serverNow]);
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!deadlineLocal) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [deadlineLocal]);
+  const remainSec = deadlineLocal ? Math.max(0, Math.ceil((deadlineLocal - now) / 1000)) : null;
+
+  // 재촉받으면 화면 테두리 펄스 (서버가 턴 플레이어에게만 보냄)
+  const [nudgeFx, setNudgeFx] = useState(null);
+  useEffect(() => {
+    // 리마운트 시 이전 게임의 낡은 재촉으로 번쩍이지 않게 3초 이내 것만
+    if (!nudged || Date.now() - nudged.ts > 3000) return undefined;
+    setNudgeFx(nudged.ts);
+    const t = setTimeout(() => setNudgeFx(null), 1800);
+    return () => clearTimeout(t);
+  }, [nudged]);
 
   const [draftBoard, setDraftBoard] = useState(null);
   const [overTarget, setOverTarget] = useState(null); // 멜드 하이라이트
@@ -552,6 +577,11 @@ export default function Game({ state, me, actions, reject }) {
             <b className={initialSum >= 30 ? 'ok' : 'no'}>{initialSum ?? 0}</b> / 30
           </span>
         )}
+        {playing && remainSec != null && (
+          <span className={`turn-timer ${remainSec <= 10 ? 'low' : ''}`}>
+            ⏱ {Math.floor(remainSec / 60)}:{String(remainSec % 60).padStart(2, '0')}
+          </span>
+        )}
         <span className="pool-tag">남은 타일 {state.poolCount}</span>
       </div>
 
@@ -718,6 +748,9 @@ export default function Game({ state, me, actions, reject }) {
           !ended && <div className="muted wait-msg">다른 사람 차례를 기다리는 중...</div>
         )}
       </div>
+
+      {/* 재촉받음: 화면 테두리 펄스 */}
+      {nudgeFx && isMyTurn && <div key={nudgeFx} className="nudge-flash" />}
 
       {/* 종료 오버레이 */}
       {ended && (

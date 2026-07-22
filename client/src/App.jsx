@@ -7,7 +7,7 @@ import Chat from './components/Chat.jsx';
 import Toast from './components/Toast.jsx';
 
 export default function App() {
-  const { connected, me, state, error, reject, chat, actions } = useRummikub();
+  const { connected, me, state, error, reject, chat, nudged, actions } = useRummikub();
   const [toast, setToast] = useState(null);
 
   // 서버 에러/거부 메시지를 토스트로
@@ -49,7 +49,7 @@ export default function App() {
                 <WaitingRoom state={state} me={me} onStart={actions.start} />
               )}
               {(state.phase === 'playing' || state.phase === 'ended') && (
-                <Game state={state} me={me} actions={actions} reject={reject} />
+                <Game state={state} me={me} actions={actions} reject={reject} nudged={nudged} />
               )}
             </div>
             <Chat
@@ -57,6 +57,8 @@ export default function App() {
               onSend={actions.sendChat}
               myId={me.playerId}
               connected={connected}
+              onNudge={actions.nudge}
+              nudgeEnabled={state.phase === 'playing' && !state.isMyTurn}
             />
           </div>
         )}

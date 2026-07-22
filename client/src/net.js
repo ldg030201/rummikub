@@ -46,6 +46,7 @@ export function useRummikub() {
   const [error, setError] = useState(null); // { message, ts }
   const [reject, setReject] = useState(null); // { reason, invalidMeldId, ts }
   const [chat, setChat] = useState([]); // { name, text, ts, system }
+  const [nudged, setNudged] = useState(null); // { from, ts } — 내가 재촉받음 (턴 플레이어에게만 옴)
 
   const pending = useRef(null); // 연결 완료 전 보낼 join 정보 { roomId, name, token }
   const reconnectTimer = useRef(null);
@@ -102,6 +103,9 @@ export function useRummikub() {
           break;
         case 'chatHistory':
           setChat(Array.isArray(msg.messages) ? msg.messages : []);
+          break;
+        case 'nudged':
+          setNudged({ from: msg.from, ts: Date.now() });
           break;
         default:
           break;
@@ -170,6 +174,7 @@ export function useRummikub() {
   const commit = useCallback((board) => rawSend({ type: 'commit', board }), [rawSend]);
   const newGame = useCallback(() => rawSend({ type: 'newGame' }), [rawSend]);
   const sendChat = useCallback((text) => rawSend({ type: 'chat', text }), [rawSend]);
+  const nudge = useCallback(() => rawSend({ type: 'nudge' }), [rawSend]);
   const leave = useCallback(() => {
     rawSend({ type: 'leave' });
     ss.del('rk_active');
@@ -179,6 +184,7 @@ export function useRummikub() {
     setMe(null);
     setState(null);
     setChat([]);
+    setNudged(null);
   }, [rawSend]);
 
   return {
@@ -188,6 +194,7 @@ export function useRummikub() {
     error,
     reject,
     chat,
-    actions: { join, start, draw, sendDraft, commit, newGame, sendChat, leave },
+    nudged,
+    actions: { join, start, draw, sendDraft, commit, newGame, sendChat, nudge, leave },
   };
 }

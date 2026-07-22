@@ -49,7 +49,9 @@ rummikub/
 - **실시간 draft**: 내 턴엔 로컬에서 타일을 옮기고(draft), 옮길 때마다 관전자에게 실시간 전송. **제출(commit)** 시 서버가 최종 검증. 형식이 깨진 board는 서버가 걸러 크래시/그리핑을 막는다.
 - **재접속**: 최초 join 시 서버가 비밀 `reconnectToken` 발급 → 클라가 sessionStorage에 저장 → 새로고침/재연결 시 토큰으로 좌석 복귀. 토큰이 없으면(탭 닫고 재입장) **이름+방코드 일치 시 끊긴 좌석에 한해 복귀** 폴백. 미제출 draft와 턴은 **유예 타이머(45s)** 로 보존돼 새로고침해도 안 뺏긴다.
 - **방 정리**: 로비면 즉시, 진행/종료 중 빈 방은 5분 재접속 유예 후 GC.
-- **WS 메시지**: `join`(roomId,name,token) / `start` / `draw` / `draft`(board) / `commit`(board) / `chat`(text) / `newGame` / `leave`. 서버→클라: `joined`(playerId,token) / `state`(개인화) / `error` / `commitRejected` / `chat` / `chatHistory`(입장 시 최근 200개).
+- **WS 메시지**: `join`(roomId,name,token) / `start` / `draw` / `draft`(board) / `commit`(board) / `chat`(text) / `nudge` / `newGame` / `leave`. 서버→클라: `joined`(playerId,token) / `state`(개인화) / `error` / `commitRejected` / `chat` / `chatHistory`(입장 시 최근 200개) / `nudged`(재촉받은 턴 플레이어에게만).
+- **턴 제한시간 90초** (`game.js`의 `TURN_TIME_MS`, 공식 룰 1분을 온라인 조작 감안해 완화): 서버가 `turnDeadline`(+`serverNow`)을 state로 내려 클라가 시계 오차 보정 후 카운트다운. 만료 시 서버가 draft 폐기·자동 한 장 뽑기·턴 넘김(`Room.timeoutTurn`). 타이머는 deadline 기반이라 draft 갱신엔 리셋 안 되고, 빈 방에선 멈췄다 재접속 시 이어감.
+- **재촉하기**: 턴이 아닌 플레이어가 채팅 패널의 버튼으로 재촉 → 시스템 챗 + 턴 플레이어 화면 테두리 펄스(`nudge-flash`). 쿨타임 5초는 서버(좌석별 `_nudgeTs`)·클라 양쪽에서 검증.
 - **손패(rack)는 2줄 슬롯 그리드**: 배치는 클라 로컬(`rackPos`, localStorage `rk_rack_<방>_<이름>`)이라 턴/새로고침과 무관하게 유지되고 **남의 턴에도 정렬 가능**. 서버는 손패를 배열로만 앎(배치는 표현 계층). 블럭 정렬(777 숫자/789 색깔, 블럭 사이 한 칸), 모으기, Shift+드래그 블럭 이동, 붙어있는 3+장이 유효 조합이면 초록 하이라이트. draft 보드에 올린 손패 타일은 슬롯을 예약한 채 숨김 처리(회수 시 제자리 복귀).
 - **채팅**: 방 단위, 오른쪽 패널. 서버가 최근 200개 보관(`Room.addChat` — 트림·200자 캡) 후 입장 시 `chatHistory`로 재전송. 게임 시작/승리는 시스템 메시지.
 

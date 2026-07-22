@@ -7,10 +7,22 @@ function nameColor(name) {
   return `hsl(${h} 70% 68%)`;
 }
 
-export default function Chat({ messages, onSend, myId, connected }) {
+export default function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
   const [text, setText] = useState('');
+  const [coolLeft, setCoolLeft] = useState(0); // 재촉 쿨타임 남은 초 (서버도 5초 검증)
   const listRef = useRef(null);
   const atBottomRef = useRef(true); // 사용자가 맨 아래를 보고 있는지
+
+  useEffect(() => {
+    if (coolLeft <= 0) return undefined;
+    const t = setTimeout(() => setCoolLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [coolLeft]);
+
+  const nudge = () => {
+    if (coolLeft > 0) return;
+    if (onNudge?.() !== false) setCoolLeft(5);
+  };
 
   // 새 메시지: 맨 아래 근처에 있을 때만 자동 스크롤 (스크롤백 읽는 중엔 방해 X)
   useEffect(() => {
@@ -37,7 +49,19 @@ export default function Chat({ messages, onSend, myId, connected }) {
 
   return (
     <aside className="chat">
-      <div className="chat-title">💬 채팅</div>
+      <div className="chat-title">
+        <span>💬 채팅</span>
+        {nudgeEnabled && (
+          <button
+            className="nudge-btn"
+            onClick={nudge}
+            disabled={!connected || coolLeft > 0}
+            title="현재 턴 플레이어 재촉하기"
+          >
+            👉 재촉{coolLeft > 0 ? ` (${coolLeft})` : ''}
+          </button>
+        )}
+      </div>
       <div className="chat-list" ref={listRef} onScroll={onScroll}>
         {messages.length === 0 && <div className="chat-empty muted">아직 메시지가 없어</div>}
         {messages.map((m, i) =>

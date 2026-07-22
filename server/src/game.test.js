@@ -1,7 +1,7 @@
 // game.js (Room) 통합 검증 — 결정적 시나리오
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Room, serializeState } from './game.js';
+import { Room, serializeState, TURN_TIME_MS } from './game.js';
 
 const T = (id, color, num) => ({ id, color, num, joker: false });
 const sock = () => ({ readyState: 1, OPEN: 1, send() {} });
@@ -183,4 +183,42 @@ test('updateDraft: 잘못된 board는 무시 (관전자 크래시 방지)', () =
   assert.equal(room.game.draftBoard, null);
   const good = [{ id: 'm1', tiles: [T('a', 'red', 3), T('b', 'red', 4), T('c', 'red', 5)] }];
   assert.equal(room.updateDraft(cur, good).ok, true);
+});
+
+test('턴 제한시간: 시작/턴 넘김 시 deadline 갱신, 직렬화에 포함', () => {
+  const room = twoPlayerRoom();
+  const before = Date.now();
+  room.start();
+  const g = room.game;
+  assert.ok(g.turnDeadline >= before + TURN_TIME_MS);
+
+  const s = serializeState(room, room.currentPlayerId());
+  assert.equal(s.turnDeadline, g.turnDeadline);
+  assert.ok(typeof s.serverNow === 'number');
+
+  // 턴을 넘기면 deadline이 다시 미래로 갱신됨
+  g.turnDeadline = 1; // 과거로 조작
+  room.draw(room.currentPlayerId());
+  assert.ok(room.game.turnDeadline >= Date.now());
+});
+
+test('timeoutTurn: 한 장 뽑아주고 턴 넘김 + draft 폐기', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  const cur = room.currentPlayerId();
+  const handBefore = room.game.racks[cur].length;
+  const poolBefore = room.game.pool.length;
+  room.game.draftBoard = [{ id: 'm1', tiles: [T('a', 'red', 3)] }];
+
+  const r = room.timeoutTurn();
+  assert.equal(r.ok, true);
+  assert.equal(r.playerId, cur);
+  assert.equal(room.game.racks[cur].length, handBefore + 1);
+  assert.equal(room.game.pool.length, poolBefore - 1);
+  assert.equal(room.game.draftBoard, null);
+  assert.notEqual(room.currentPlayerId(), cur);
+
+  // playing이 아니면 무시
+  room.phase = 'ended';
+  assert.equal(room.timeoutTurn().ok, false);
 });

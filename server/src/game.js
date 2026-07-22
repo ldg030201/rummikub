@@ -4,6 +4,8 @@ import { buildPool, shuffle, setCountForPlayers } from './tiles.js';
 import { validateCommit, isBoardShape } from './rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
+// 턴 제한시간. 공식 룰은 1분이지만 온라인 드래그 조작이 실물보다 느려 90초로 완화.
+export const TURN_TIME_MS = 90 * 1000;
 
 // 개인화된 상태를 만든다 (요청한 플레이어 기준: 내 손패만 전체 공개)
 export function serializeState(room, forPlayerId) {
@@ -42,6 +44,9 @@ export function serializeState(room, forPlayerId) {
       brokeIn: !!g.brokeIn[forPlayerId],
       winnerId: g.winnerId ?? null,
       turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
+      // 턴 마감시각 + 서버 현재시각 (클라가 시계 오차 보정해 카운트다운)
+      turnDeadline: g.turnDeadline ?? null,
+      serverNow: Date.now(),
     });
   }
 
@@ -175,6 +180,7 @@ export class Room {
       setCount,
       draftBoard: null, // 현재 턴 플레이어의 실시간 draft
       turnStartBoard: [], // 현재 턴 시작 시점 보드 (되돌리기 기준)
+      turnDeadline: Date.now() + TURN_TIME_MS, // 이 시각까지 제출/뽑기 안 하면 자동 뽑기+턴 넘김
       winnerId: null,
     };
     return { ok: true };
@@ -198,6 +204,7 @@ export class Room {
       }
     }
     g.turnStartBoard = deepClone(g.board);
+    g.turnDeadline = Date.now() + TURN_TIME_MS;
   }
 
   // 한 장 뽑기 (턴 종료). 풀이 비면 그냥 패스.
@@ -212,6 +219,16 @@ export class Room {
     }
     this.advanceTurn();
     return { ok: true };
+  }
+
+  // 턴 시간 초과: 미제출 draft를 폐기하고 한 장 뽑아준 뒤 턴을 넘긴다 (서버 내부용)
+  timeoutTurn() {
+    const g = this.game;
+    if (!g || this.phase !== 'playing') return { ok: false };
+    const pid = this.currentPlayerId();
+    if (g.pool.length > 0) g.racks[pid].push(g.pool.shift());
+    this.advanceTurn(); // draftBoard도 여기서 null 처리됨
+    return { ok: true, playerId: pid };
   }
 
   // 실시간 draft 갱신 (룰 검증은 X지만, 형식은 검증해서 관전자 크래시 방지)
