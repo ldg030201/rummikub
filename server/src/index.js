@@ -43,6 +43,7 @@ function cleanupIfEmpty(room) {
     clearRoomGC(room);
     return;
   }
+  clearTurnSkip(room);
   if (room.phase === 'lobby') {
     clearRoomGC(room);
     rooms.delete(room.id);
@@ -55,6 +56,45 @@ function cleanupIfEmpty(room) {
     }, ROOM_GC_MS);
     room._gcTimer.unref?.();
   }
+}
+
+const TURN_GRACE_MS = 45 * 1000; // 현재 턴 플레이어가 끊겨도 이 시간 안에 재접속하면 턴 유지
+
+function clearTurnSkip(room) {
+  if (room._turnSkip) {
+    clearTimeout(room._turnSkip);
+    room._turnSkip = null;
+  }
+}
+
+// 현재 턴 플레이어가 끊긴 상태면 유예 후 턴을 넘긴다 (새로고침으로 턴을 뺏기지 않게).
+// 현재 턴 플레이어가 접속돼 있으면 예약된 넘김을 취소한다.
+function syncTurnSkip(room) {
+  const cur = room.game && room.phase === 'playing' ? room.currentPlayerId() : null;
+  const p = cur ? room.players.get(cur) : null;
+  if (p && !p.connected) {
+    if (!room._turnSkip) {
+      room._turnSkip = setTimeout(() => {
+        room._turnSkip = null;
+        const c = room.currentPlayerId();
+        const cp = c ? room.players.get(c) : null;
+        if (room.game && room.phase === 'playing' && cp && !cp.connected) {
+          room.advanceTurn();
+          broadcastRoom(room);
+          syncTurnSkip(room);
+        }
+      }, TURN_GRACE_MS);
+      room._turnSkip.unref?.();
+    }
+  } else {
+    clearTurnSkip(room);
+  }
+}
+
+// 상태 전파 + 턴 넘김 타이머 동기화 (턴/접속이 바뀔 때마다 호출)
+function pushState(room) {
+  broadcastRoom(room);
+  syncTurnSkip(room);
 }
 
 // ---- 정적 파일 서빙 ----
@@ -159,7 +199,7 @@ wss.on('connection', (ws) => {
           if (prev && prevP && prevP.socket === ws) {
             prev.removeSocket(ctx.playerId);
             if (prev.game && prev.currentPlayerId() === ctx.playerId) prev.advanceTurn();
-            broadcastRoom(prev);
+            pushState(prev);
             cleanupIfEmpty(prev);
           }
         }
@@ -198,7 +238,7 @@ wss.on('connection', (ws) => {
           name: seat.name,
           token: seat.reconnectToken,
         });
-        broadcastRoom(room);
+        pushState(room);
         break;
       }
 
@@ -210,7 +250,7 @@ wss.on('connection', (ws) => {
           send(ws, { type: 'error', message: r.reason });
           return;
         }
-        broadcastRoom(room);
+        pushState(room);
         break;
       }
 
@@ -222,7 +262,7 @@ wss.on('connection', (ws) => {
           send(ws, { type: 'error', message: r.reason });
           return;
         }
-        broadcastRoom(room);
+        pushState(room);
         break;
       }
 
@@ -230,7 +270,7 @@ wss.on('connection', (ws) => {
         const room = rooms.get(ctx.roomId);
         if (!room) return;
         const r = room.updateDraft(ctx.playerId, msg.board);
-        if (r.ok) broadcastRoom(room);
+        if (r.ok) pushState(room);
         break;
       }
 
@@ -246,7 +286,7 @@ wss.on('connection', (ws) => {
           });
           return;
         }
-        broadcastRoom(room);
+        pushState(room);
         break;
       }
 
@@ -259,7 +299,7 @@ wss.on('connection', (ws) => {
           return;
         }
         room.resetToLobby();
-        broadcastRoom(room);
+        pushState(room);
         break;
       }
 
@@ -267,11 +307,11 @@ wss.on('connection', (ws) => {
         const room = rooms.get(ctx.roomId);
         if (!room) return;
         room.removeSocket(ctx.playerId);
-        // close 핸들러와 동일하게: 나간 사람이 현재 턴이면 턴을 넘긴다 (데드락 방지)
+        // 명시적으로 나간 경우엔 즉시 턴을 넘긴다 (데드락 방지)
         if (room.game && room.currentPlayerId() === ctx.playerId) {
           room.advanceTurn();
         }
-        broadcastRoom(room);
+        pushState(room);
         cleanupIfEmpty(room);
         ctx = { roomId: null, playerId: null };
         break;
@@ -292,11 +332,9 @@ wss.on('connection', (ws) => {
     // 이미 새 소켓으로 교체됨(재접속) → 이 close는 옛 소켓 것이므로 무시
     if (!p || p.socket !== ws) return;
     room.removeSocket(ctx.playerId);
-    // 진행 중이고 나간 사람이 현재 턴이면 턴을 넘긴다
-    if (room.game && room.currentPlayerId() === ctx.playerId) {
-      room.advanceTurn();
-    }
-    broadcastRoom(room);
+    // 즉시 턴을 넘기지 않는다. 현재 턴 플레이어면 pushState→syncTurnSkip가 유예 타이머를 건다.
+    // (새로고침 등 순간 끊김에 턴을 뺏기지 않게. 유예 시간 안에 재접속하면 턴 유지)
+    pushState(room);
     cleanupIfEmpty(room);
   });
 });
