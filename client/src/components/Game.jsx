@@ -1068,6 +1068,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
               <span className="pool-tile" />
             </span>
             <span className="pool-count">{state.poolCount}</span>
+            {isMyTurn && state.poolCount > 0 && <span className="pool-hint">타일 뽑기</span>}
           </button>
         )}
       </div>
@@ -1081,17 +1082,28 @@ export default function Game({ state, me, actions, reject, nudged }) {
           </span>
           <span className="rack-tip muted">Shift+드래그 = 블럭 통째로 이동</span>
           <div className="sort-btns">
-            <button className="ghost sm" onClick={() => sortRack('num')}>
-              777 숫자순
+            <button className="sort-btn" onClick={() => sortRack('num')} title="같은 숫자끼리 정렬 (777)">
+              <span className="mini-t red">7</span>
+              <span className="mini-t blue">7</span>
+              <span className="mini-t black">7</span>
             </button>
-            <button className="ghost sm" onClick={() => sortRack('color')}>
-              789 색깔순
+            <button className="sort-btn" onClick={() => sortRack('color')} title="색깔별 연속 정렬 (789)">
+              <span className="mini-t blue">7</span>
+              <span className="mini-t blue">8</span>
+              <span className="mini-t blue">9</span>
             </button>
-            <button className="ghost sm" onClick={compactRack}>
-              모으기
+            <button className="sort-btn" onClick={compactRack} title="빈 칸 없이 모으기">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12h5.5" />
+                <path d="M6 9l3 3-3 3" />
+                <path d="M21 12h-5.5" />
+                <path d="M18 9l-3 3 3 3" />
+                <path d="M12 5v14" />
+              </svg>
             </button>
           </div>
         </div>
+        <div className="rack-row">
         <div className="rack-scroll" ref={rackScrollRef}>
           <div
             className="rack-grid"
@@ -1138,25 +1150,34 @@ export default function Game({ state, me, actions, reject, nudged }) {
             )}
           </div>
         </div>
-      </div>
 
-      {/* 컨트롤 */}
-      <div className="controls">
-        {isMyTurn ? (
-          <>
-            <button className="primary" onClick={commit}>
-              제출
+        {/* 턴 액션: 제출 / 되돌리기 (내 턴에만 활성) */}
+        {playing && (
+          <div className="action-col">
+            <button
+              className="action-btn submit"
+              onClick={commit}
+              disabled={!isMyTurn}
+              title="제출 — 이번 턴 확정"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12.5l4.5 4.5L19 7" />
+              </svg>
             </button>
-            <button className="ghost" onClick={resetTurn}>
-              되돌리기
+            <button
+              className="action-btn undo"
+              onClick={resetTurn}
+              disabled={!isMyTurn}
+              title="되돌리기 — 턴 시작 상태로"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8.5 13.5L4 9l4.5-4.5" />
+                <path d="M4 9h9.5a6.5 6.5 0 0 1 0 13H10" />
+              </svg>
             </button>
-            <button className="warn" onClick={actions.draw}>
-              한 장 뽑기 (턴 넘김)
-            </button>
-          </>
-        ) : (
-          !ended && <div className="muted wait-msg">다른 사람 차례를 기다리는 중...</div>
+          </div>
         )}
+        </div>
       </div>
 
       {/* 재촉받음: 화면 테두리 펄스 */}

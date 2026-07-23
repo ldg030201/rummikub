@@ -888,14 +888,116 @@ button:disabled {
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7), 0 3px 8px rgba(34, 197, 94, 0.25);
 }
 
-.controls {
+/* 손패 옆 턴 액션 (제출 ✓ / 되돌리기 ↩) — 원형 아이콘 버튼 */
+.rack-row {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
 }
-.wait-msg {
-  font-size: 14px;
+.rack-row .rack-scroll {
+  flex: 1;
+  min-width: 0;
+}
+.action-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.action-btn {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+.action-btn svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.action-btn.submit {
+  background: linear-gradient(160deg, #34d17b, #16a34a);
+  color: #04140b;
+}
+.action-btn.undo {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #3b4a63;
+}
+.action-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.action-btn:disabled {
+  opacity: 0.3;
+}
+
+/* 정렬 아이콘 버튼 (미니 타일 묶음) */
+.sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 7px;
+  background: var(--panel-2);
+  border: 1px solid #3b4a63;
+  border-radius: 8px;
+}
+.sort-btn:hover {
+  filter: brightness(1.2);
+}
+.mini-t {
+  width: 15px;
+  height: 20px;
+  border-radius: 3px;
+  background: linear-gradient(165deg, #faf5e8, var(--tile-face) 60%, #efe7d2);
+  border-bottom: 1.5px solid var(--tile-edge);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-t.red {
+  color: var(--red);
+}
+.mini-t.blue {
+  color: var(--blue);
+}
+.mini-t.black {
+  color: var(--black);
+}
+.sort-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 내 턴에 뽑기 더미 아래 라벨 */
+.pool-hint {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(56, 189, 248, 0.35);
+  padding: 2px 8px;
+  border-radius: 8px;
+  animation: hint-pulse 1.8s ease-in-out infinite;
+}
+@keyframes hint-pulse {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 /* 오버레이 */
