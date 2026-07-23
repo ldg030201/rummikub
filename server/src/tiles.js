@@ -6,20 +6,15 @@ export const COLORS = ['red', 'blue', 'black', 'orange'];
 export const MIN_NUM = 1;
 export const MAX_NUM = 13;
 
-let _idCounter = 0;
-function nextId(prefix) {
-  _idCounter += 1;
-  return `${prefix}${_idCounter}`;
-}
-
-// 한 벌(세트) 생성: 각 숫자/색 조합 2개씩 + 조커 2개
+// 한 벌(세트) 생성: 각 숫자/색 조합 2개씩 + 조커 2개.
+// id는 내용 기반이라 한 풀 안에서 결정적으로 유일하다 (게임 간 구분은 gameTag가 담당).
 function buildOneSet(setIndex, gameTag) {
   const tiles = [];
   for (let copy = 0; copy < 2; copy += 1) {
     for (const color of COLORS) {
       for (let num = MIN_NUM; num <= MAX_NUM; num += 1) {
         tiles.push({
-          id: nextId(`${gameTag}t${setIndex}_`),
+          id: `${gameTag}t${setIndex}_${copy}_${color}_${num}`,
           color,
           num,
           joker: false,
@@ -30,18 +25,13 @@ function buildOneSet(setIndex, gameTag) {
   // 조커 2개
   for (let j = 0; j < 2; j += 1) {
     tiles.push({
-      id: nextId(`${gameTag}j${setIndex}_`),
+      id: `${gameTag}j${setIndex}_${j}`,
       color: null,
       num: null,
       joker: true,
     });
   }
   return tiles;
-}
-
-// playerCount 에 따라 세트 수 결정 (<=4: 1세트, 5~6: 2세트)
-export function setCountForPlayers(playerCount) {
-  return playerCount >= 5 ? 2 : 1;
 }
 
 export function buildPool(setCount) {

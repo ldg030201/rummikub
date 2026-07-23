@@ -1,6 +1,6 @@
 // 방(Room) + 게임 상태 관리
 import { randomUUID } from 'node:crypto';
-import { buildPool, shuffle, setCountForPlayers } from './tiles.js';
+import { buildPool, shuffle } from './tiles.js';
 import { validateCommit, isBoardShape } from './rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
@@ -30,7 +30,6 @@ export function serializeState(room, forPlayerId) {
     phase: room.phase, // 'lobby' | 'playing' | 'ended'
     players,
     hostId: room.order[0] ?? null,
-    you: forPlayerId,
     settings: room.settings,
   };
 
@@ -175,10 +174,6 @@ export class Room {
     }
   }
 
-  connectedCount() {
-    return [...this.players.values()].filter((p) => p.connected).length;
-  }
-
   // 게임 시작 (로비에 있는 아무나 호출 가능)
   start() {
     if (this.phase !== 'lobby') {
@@ -192,12 +187,9 @@ export class Room {
       return { ok: false, reason: '최대 6명까지만 가능해.' };
     }
 
-    // 세트 수: 설정 우선, 자동이면 인원 기준. 5인 이상은 1세트가 모자라 무조건 2세트.
-    let setCount =
-      this.settings.setCount === 'auto'
-        ? setCountForPlayers(seated.length)
-        : this.settings.setCount;
-    if (seated.length >= 5) setCount = 2;
+    // 세트 수: 5인 이상은 1세트가 모자라 무조건 2세트, 그 외엔 설정(자동=1세트)
+    const setCount =
+      seated.length >= 5 ? 2 : this.settings.setCount === 'auto' ? 1 : this.settings.setCount;
     let pool = shuffle(buildPool(setCount));
 
     const racks = {};
@@ -247,27 +239,27 @@ export class Room {
     g.turnDeadline = this.nextDeadline();
   }
 
-  // 한 장 뽑기 (턴 종료). 풀이 비면 그냥 패스.
-  draw(playerId) {
+  // 풀에서 한 장 뽑아 손패에 추가 후 턴 넘김 (풀이 비면 그냥 패스). draw/timeoutTurn 공용.
+  #drawAndAdvance(playerId) {
     const g = this.game;
-    if (!g || this.phase !== 'playing' || this.currentPlayerId() !== playerId) {
+    if (g.pool.length > 0) g.racks[playerId].push(g.pool.shift());
+    this.advanceTurn(); // draftBoard도 여기서 null 처리됨
+  }
+
+  // 한 장 뽑기 (턴 종료)
+  draw(playerId) {
+    if (!this.game || this.phase !== 'playing' || this.currentPlayerId() !== playerId) {
       return { ok: false, reason: '네 턴이 아니야.' };
     }
-    if (g.pool.length > 0) {
-      const tile = g.pool.shift();
-      g.racks[playerId].push(tile);
-    }
-    this.advanceTurn();
+    this.#drawAndAdvance(playerId);
     return { ok: true };
   }
 
   // 턴 시간 초과: 미제출 draft를 폐기하고 한 장 뽑아준 뒤 턴을 넘긴다 (서버 내부용)
   timeoutTurn() {
-    const g = this.game;
-    if (!g || this.phase !== 'playing') return { ok: false };
+    if (!this.game || this.phase !== 'playing') return { ok: false };
     const pid = this.currentPlayerId();
-    if (g.pool.length > 0) g.racks[pid].push(g.pool.shift());
-    this.advanceTurn(); // draftBoard도 여기서 null 처리됨
+    this.#drawAndAdvance(pid);
     return { ok: true, playerId: pid };
   }
 
