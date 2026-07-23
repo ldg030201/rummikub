@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ss } from '../storage.js';
 
-export default function JoinForm({ onJoin, connected }) {
+export default function JoinForm({ onJoin, connected, excel }) {
   const [name, setName] = useState(ss.get('rk_name') || '');
   const [room, setRoom] = useState(ss.get('rk_room') || 'DONG');
+  const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
 
   const submit = (e) => {
     e.preventDefault();
@@ -21,37 +22,42 @@ export default function JoinForm({ onJoin, connected }) {
 
   return (
     <div className="join card">
-      <h1>루미큐브 입장</h1>
+      <h1>{t('루미큐브 입장', '통합 문서 열기')}</h1>
       <p className="muted">
-        같은 <b>방 코드</b>를 입력하면 함께 플레이해. 친구에게 방 코드와 접속 주소를 공유하면 돼.
+        {t('같은 ', '같은 ')}
+        <b>{t('방 코드', '문서 코드')}</b>
+        {t(
+          '를 입력하면 함께 플레이해. 친구에게 방 코드와 접속 주소를 공유하면 돼.',
+          '를 입력하면 공동 편집돼. 동료에게 코드와 접속 주소를 공유하면 돼.'
+        )}
       </p>
       <form onSubmit={submit}>
         <label>
-          이름
+          {t('이름', '사용자 이름')}
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="닉네임"
+            placeholder={t('닉네임', '이름')}
             maxLength={20}
             autoFocus
           />
         </label>
         <label>
-          방 코드
+          {t('방 코드', '문서 코드')}
           <div className="row">
             <input
               value={room}
               onChange={(e) => setRoom(e.target.value.toUpperCase())}
-              placeholder="예: ABCD"
+              placeholder={t('예: ABCD', '예: SALES')}
               maxLength={12}
             />
             <button type="button" className="ghost" onClick={randomRoom}>
-              랜덤
+              {t('랜덤', '새 문서')}
             </button>
           </div>
         </label>
         <button type="submit" className="primary" disabled={!connected}>
-          {connected ? '입장' : '서버 연결 중...'}
+          {connected ? t('입장', '열기') : t('서버 연결 중...', '연결 중...')}
         </button>
       </form>
     </div>
