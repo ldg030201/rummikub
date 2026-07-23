@@ -333,7 +333,8 @@ function TurnTimer({ deadline }) {
   );
 }
 
-export default function Game({ state, me, actions, reject, nudged }) {
+export default function Game({ state, me, actions, reject, nudged, excel }) {
+  const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
@@ -912,16 +913,21 @@ export default function Game({ state, me, actions, reject, nudged }) {
     <div className="game" ref={rootRef}>
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {ended ? (
-          <b>게임 종료</b>
+          <b>{t('게임 종료', '문서 잠김')}</b>
         ) : isMyTurn ? (
-          <b>내 차례!</b>
+          <b>{t('내 차례!', '입력 모드')}</b>
         ) : (
-          <span>{currentPlayer ? `${currentPlayer.name} 님의 차례` : '대기 중'}</span>
+          <span>
+            {currentPlayer
+              ? `${currentPlayer.name} ${t('님의 차례', '님 편집 중')}`
+              : t('대기 중', '준비')}
+          </span>
         )}
         {/* 30점을 채우면(등록 조건 완성) 숨김 — 회수해서 다시 모자라면 재표시 */}
         {!state.brokeIn && isMyTurn && (initialSum ?? 0) < INITIAL_MELD_MIN && (
           <span className="initial-hint">
-            첫 등록 필요: <b className="no">{initialSum ?? 0}</b> / {INITIAL_MELD_MIN}
+            {t('첫 등록 필요: ', '필요 합계: ')}
+            <b className="no">{initialSum ?? 0}</b> / {INITIAL_MELD_MIN}
           </span>
         )}
         {playing && deadlineLocal != null && <TurnTimer deadline={deadlineLocal} />}
@@ -942,8 +948,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
             >
               <div className="seat-name">
                 {p.name}
-                {p.brokeIn && <span className="mini-badge">등록</span>}
-                {!p.connected && <span className="seat-off">연결 끊김</span>}
+                {p.brokeIn && <span className="mini-badge">{t('등록', '입력')}</span>}
+                {!p.connected && <span className="seat-off">{t('연결 끊김', '오프라인')}</span>}
               </div>
               <div className="mini-hand">
                 <div className="mini-fan">
@@ -958,7 +964,9 @@ export default function Game({ state, me, actions, reject, nudged }) {
           ))}
         </div>
 
-        {board.length === 0 && <div className="empty-table">아직 놓인 조합이 없어</div>}
+        {board.length === 0 && (
+          <div className="empty-table">{t('아직 놓인 조합이 없어', '표시할 데이터가 없습니다')}</div>
+        )}
         <div
           className="melds"
           ref={meldsRef}
@@ -1027,7 +1035,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
               }}
               onDrop={dropIntoNewMeld}
             >
-              + 새 조합
+              {t('+ 새 조합', '+ 새 범위')}
             </div>
           )}
         </div>
@@ -1043,7 +1051,11 @@ export default function Game({ state, me, actions, reject, nudged }) {
             ].join(' ')}
             onClick={isMyTurn ? actions.draw : undefined}
             disabled={!isMyTurn}
-            title={isMyTurn ? '한 장 뽑기 (턴 넘김)' : `남은 타일 ${state.poolCount}`}
+            title={
+              isMyTurn
+                ? t('한 장 뽑기 (턴 넘김)', '데이터 가져오기')
+                : `${t('남은 타일', '남은 행')} ${state.poolCount}`
+            }
           >
             <span className="pool-stack">
               <span className="pool-tile" />
@@ -1051,7 +1063,9 @@ export default function Game({ state, me, actions, reject, nudged }) {
               <span className="pool-tile" />
             </span>
             <span className="pool-count">{state.poolCount}</span>
-            {isMyTurn && state.poolCount > 0 && <span className="pool-hint">타일 뽑기</span>}
+            {isMyTurn && state.poolCount > 0 && (
+              <span className="pool-hint">{t('타일 뽑기', '가져오기')}</span>
+            )}
           </button>
         )}
       </div>
@@ -1060,22 +1074,38 @@ export default function Game({ state, me, actions, reject, nudged }) {
       <div className="rack-area">
         <div className="rack-header">
           <span>
-            내 손패 ({myHand.length})
-            {hiddenIds.size > 0 && <span className="muted"> · 보드에 {hiddenIds.size}장</span>}
+            {t('내 손패', '선택 영역')} ({myHand.length})
+            {hiddenIds.size > 0 && (
+              <span className="muted">
+                {' '}
+                · {t('보드에', '시트에')} {hiddenIds.size}
+                {t('장', '개')}
+              </span>
+            )}
           </span>
-          <span className="rack-tip muted">Shift+드래그 = 블럭 통째로 이동</span>
+          <span className="rack-tip muted">
+            {t('Shift+드래그 = 블럭 통째로 이동', 'Shift+드래그 = 범위 이동')}
+          </span>
           <div className="sort-btns">
-            <button className="sort-btn" onClick={() => sortRack('num')} title="같은 숫자끼리 정렬 (777)">
+            <button
+              className="sort-btn"
+              onClick={() => sortRack('num')}
+              title={t('같은 숫자끼리 정렬 (777)', '값 기준 정렬')}
+            >
               <span className="mini-t red">7</span>
               <span className="mini-t blue">7</span>
               <span className="mini-t black">7</span>
             </button>
-            <button className="sort-btn" onClick={() => sortRack('color')} title="색깔별 연속 정렬 (789)">
+            <button
+              className="sort-btn"
+              onClick={() => sortRack('color')}
+              title={t('색깔별 연속 정렬 (789)', '색 기준 정렬')}
+            >
               <span className="mini-t blue">7</span>
               <span className="mini-t blue">8</span>
               <span className="mini-t blue">9</span>
             </button>
-            <button className="sort-btn" onClick={compactRack} title="빈 칸 없이 모으기">
+            <button className="sort-btn" onClick={compactRack} title={t('빈 칸 없이 모으기', '빈 셀 제거')}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M3 12h5.5" />
                 <path d="M6 9l3 3-3 3" />
@@ -1141,7 +1171,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
               className="action-btn submit"
               onClick={commit}
               disabled={!isMyTurn}
-              title="제출 — 이번 턴 확정"
+              title={t('제출 — 이번 턴 확정', '저장 — 변경 내용 저장')}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 12.5l4.5 4.5L19 7" />
@@ -1151,7 +1181,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
               className="action-btn undo"
               onClick={resetTurn}
               disabled={!isMyTurn}
-              title="되돌리기 — 턴 시작 상태로"
+              title={t('되돌리기 — 턴 시작 상태로', '실행 취소 — 되돌리기')}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M8.5 13.5L4 9l4.5-4.5" />
@@ -1170,10 +1200,14 @@ export default function Game({ state, me, actions, reject, nudged }) {
       {ended && (
         <div className="overlay">
           <div className="overlay-card">
-            <h1>🎉 {winner ? `${winner.name} 승리!` : '게임 종료'}</h1>
-            <p className="muted">모든 타일을 먼저 내려놓았어.</p>
+            <h1>
+              {winner
+                ? `${winner.name} ${t('승리! 🎉', '결재 완료 ✅')}`
+                : t('게임 종료', '문서 잠김')}
+            </h1>
+            <p className="muted">{t('모든 타일을 먼저 내려놓았어.', '모든 항목을 먼저 입력했어.')}</p>
             <button className="primary big" onClick={actions.newGame}>
-              새 게임 (대기실로)
+              {t('새 게임 (대기실로)', '새 통합 문서')}
             </button>
           </div>
         </div>
