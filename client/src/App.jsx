@@ -6,6 +6,12 @@ import WaitingRoom from './components/WaitingRoom.jsx';
 import Game from './components/Game.jsx';
 import Chat from './components/Chat.jsx';
 import Toast from './components/Toast.jsx';
+import {
+  ExcelRibbon,
+  ExcelFormulaBar,
+  ExcelSheetTabs,
+  ExcelStatusBar,
+} from './components/ExcelFrame.jsx';
 
 // 선택 가능한 테마 (value, 라벨). 'excel' = 회사에서 몰래 하는 엑셀 위장 모드.
 const THEMES = [
@@ -33,12 +39,25 @@ export default function App() {
   }, [reject]);
 
   const joined = me && state;
+  const excel = theme === 'excel';
+  // 상태바에 흘릴 게임값 (엑셀 모드 위장): 손패 수 = 개수, 내 턴 = '입력'
+  const handCount = state && typeof state === 'object' ? state.myHand?.length : undefined;
+  const statusMode = state?.isMyTurn ? '입력' : '준비';
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-tile">13</span> 루미큐브
+          {excel ? (
+            <>
+              <span className="brand-tile">X</span> 2024_4분기_실적_보고_최종.xlsx
+              <span className="muted xl-suffix"> — Excel</span>
+            </>
+          ) : (
+            <>
+              <span className="brand-tile">13</span> 루미큐브
+            </>
+          )}
         </div>
         <div className="conn">
           <span className={`dot ${connected ? 'on' : 'off'}`} />
@@ -70,6 +89,10 @@ export default function App() {
         </div>
       </header>
 
+      {/* 엑셀 위장 크롬: 리본 + 수식 입력줄 (게임 화면을 스프레드시트로 감싼다) */}
+      {excel && <ExcelRibbon />}
+      {excel && <ExcelFormulaBar cell={joined ? 'A1' : ''} value="=SUM(B2:B15)" />}
+
       <main className="main">
         {!joined && <JoinForm onJoin={actions.join} connected={connected} />}
         {joined && (
@@ -98,6 +121,10 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* 엑셀 위장 크롬: 시트 탭 + 상태바 (하단) */}
+      {excel && <ExcelSheetTabs active={joined && state.phase !== 'lobby' ? '실적요약' : 'Sheet1'} />}
+      {excel && <ExcelStatusBar mode={joined ? statusMode : '준비'} count={handCount} />}
 
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
