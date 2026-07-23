@@ -1,0 +1,111 @@
+/* ============================================================
+   📊 엑셀 위장 테마 (data-theme='excel')
+   "회사에서 몰래 하는" 컨셉 — 전 화면을 MS Excel 스프레드시트처럼.
+
+   ⚠️ 테마는 :root(html)에 걸린다 (App.jsx). FLIP 애니메이션 클론이
+   document.body(= .app 바깥)에 붙으므로 .app 스코프면 날아다니는
+   타일이 스킨을 못 받는다. 반드시 :root[data-theme='excel'].
+
+   색값: 브랜드 그린은 확실값(#107C41 등), 격자/헤더/선택 회색·그린은
+   MS 미공개라 스크린샷 근사치.
+   ============================================================ */
+
+:root[data-theme='excel'] {
+  /* ── Excel 디자인 토큰 ── */
+  --xl-green: #107c41; /* 액센트 그린 (리본·탭·상태바) */
+  --xl-green-dark: #185c37; /* 진한 그린 (호버/눌림) */
+  --xl-green-light: #21a366;
+  --xl-cell: #ffffff; /* 셀 배경 */
+  --xl-grid: #d0d7de; /* 격자선 */
+  --xl-grid-strong: #bfbfbf; /* 짙은 구분선 */
+  --xl-header-bg: #f5f6f7; /* 열/행 머리글 배경 */
+  --xl-header-text: #616161;
+  --xl-sel: #107c41; /* 선택 셀 테두리 */
+  --xl-sel-fill: rgba(16, 124, 65, 0.1);
+  --xl-ribbon: #f3f2f1; /* 리본 뉴트럴 배경 */
+  --xl-cell-w: 64px; /* 기본 열 폭(8.43자) */
+  --xl-cell-h: 24px; /* 기본 행 높이 */
+
+  /* ── 앱 팔레트를 엑셀 값으로 스왑 (대부분 var()라 자동 전파) ── */
+  --bg: #ffffff;
+  --panel: #f3f2f1;
+  --panel-2: #f5f6f7;
+  --felt: #ffffff;
+  --felt-2: #ffffff;
+  --text: #1b1b1b;
+  --muted: #616161;
+  --accent: #107c41;
+  --accent-rgb: 16, 124, 65;
+  --border: #d0d7de;
+  --line: #bfbfbf;
+  --ok: #107c41;
+  --no: #d13438; /* 엑셀 오류 빨강 */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+
+  /* 타일 = 셀: 흰 배경, 납작하고 각지게 */
+  --tile-face: #ffffff;
+  --tile-edge: #d0d7de;
+  --tile-grad: #ffffff;
+}
+
+/* 폰트: 한국어판 엑셀 기본 = 맑은 고딕. + 전면 격자선(무한 셀 느낌, 위장 Tier S) */
+:root[data-theme='excel'] body {
+  font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Segoe UI', 'Noto Sans KR',
+    sans-serif;
+  color: var(--text);
+  background-color: #fff;
+  background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
+  background-size: var(--xl-cell-w) var(--xl-cell-h);
+}
+
+/* 상단바 → 엑셀 제목 표시줄 (흰 배경 + 얇은 경계) */
+:root[data-theme='excel'] .topbar {
+  background: #fff;
+  border-bottom: 1px solid var(--xl-grid);
+  color: var(--text);
+}
+:root[data-theme='excel'] .brand {
+  color: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .brand-tile {
+  background: var(--xl-green);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+}
+
+/* 패널/카드 평탄화: 흰 배경 + 각진 모서리 + 얇은 회색 테두리 (셀 느낌) */
+:root[data-theme='excel'] .card,
+:root[data-theme='excel'] .chat {
+  background: #fff;
+  border: 1px solid var(--xl-grid);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 버튼/입력: 각지고 납작하게 (스큐어모픽 → 엑셀 컨트롤) */
+:root[data-theme='excel'] button,
+:root[data-theme='excel'] input,
+:root[data-theme='excel'] select {
+  border-radius: 2px;
+}
+:root[data-theme='excel'] .primary {
+  background: var(--xl-green);
+  color: #fff;
+  border: 1px solid var(--xl-green-dark);
+  font-weight: 600;
+}
+:root[data-theme='excel'] .ghost,
+:root[data-theme='excel'] .theme-select {
+  background: #fff;
+  border: 1px solid var(--xl-grid);
+  color: var(--text);
+}
+
+/* 엑셀은 평면 UI — 들뜨는 등장/펄스 애니메이션 억제 (FLIP은 JS라 영향 없음) */
+:root[data-theme='excel'] .card,
+:root[data-theme='excel'] .toast,
+:root[data-theme='excel'] .overlay-card {
+  animation: none;
+}
