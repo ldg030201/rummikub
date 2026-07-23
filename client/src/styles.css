@@ -109,6 +109,16 @@ body {
   font-size: 13px;
   padding: 0 2px;
 }
+/* 테마 선택 드롭다운 (상단바 우측). 각 테마가 자기 스코프에서 다시 스타일링 */
+.theme-select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
 
 .main {
   flex: 1;
