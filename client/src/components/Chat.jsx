@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 // 이름 → 고정 색 (해시 기반)
 function nameColor(name) {
@@ -7,7 +7,9 @@ function nameColor(name) {
   return `hsl(${h} 70% 68%)`;
 }
 
-export default function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
+// memo: 서버 state 브로드캐스트(상대 드래그 draft 스트림 포함)마다 채팅 200행이
+// 재렌더되지 않게 — props는 채팅 수신·턴 전환 때만 바뀐다.
+function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
   const [text, setText] = useState('');
   const [coolLeft, setCoolLeft] = useState(0); // 재촉 쿨타임 남은 초 (서버도 5초 검증)
   const listRef = useRef(null);
@@ -94,3 +96,5 @@ export default function Chat({ messages, onSend, myId, connected, onNudge, nudge
     </aside>
   );
 }
+
+export default memo(Chat);

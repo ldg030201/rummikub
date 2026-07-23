@@ -312,25 +312,36 @@ function flyTileBack(from, to) {
   setTimeout(() => el.remove(), 380);
 }
 
+// 턴 카운트다운 — 0.5초 tick 리렌더를 이 작은 컴포넌트 안에 가둔다.
+// (Game 본체에 두면 tick마다 전체 리렌더 + FLIP 위치 측정이 같이 돌아 낭비)
+function TurnTimer({ deadline }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [deadline]);
+  const remainSec = Math.max(0, Math.ceil((deadline - now) / 1000));
+  return (
+    <span className={`turn-timer ${remainSec <= 10 ? 'low' : ''}`}>
+      ⏱ {Math.floor(remainSec / 60)}:{String(remainSec % 60).padStart(2, '0')}
+    </span>
+  );
+}
+
 export default function Game({ state, me, actions, reject, nudged }) {
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
 
   // ---- 턴 제한시간 카운트다운 ----
-  // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정)
+  // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정).
+  // serverNow는 deadline이 갱신된 그 메시지에서 한 번만 읽는다 — 의존성에 넣으면
+  // 매 브로드캐스트(상대 draft 스트림 포함)마다 값이 새로 나와 타이머가 재생성된다.
   const deadlineLocal = useMemo(() => {
     if (!playing || !state.turnDeadline || !state.serverNow) return null;
     return Date.now() + (state.turnDeadline - state.serverNow);
-  }, [playing, state.turnDeadline, state.serverNow]);
-
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!deadlineLocal) return undefined;
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
-  }, [deadlineLocal]);
-  const remainSec = deadlineLocal ? Math.max(0, Math.ceil((deadlineLocal - now) / 1000)) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, state.turnDeadline]);
 
   // ---- 타일 이동 애니메이션 (FLIP) ----
   // 렌더마다 타일들의 화면 위치를 기억하고, 위치가 바뀌면 이전 위치→새 위치로 날아가게 한다.
@@ -906,11 +917,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
             첫 등록 필요: <b className="no">{initialSum ?? 0}</b> / {INITIAL_MELD_MIN}
           </span>
         )}
-        {playing && remainSec != null && (
-          <span className={`turn-timer ${remainSec <= 10 ? 'low' : ''}`}>
-            ⏱ {Math.floor(remainSec / 60)}:{String(remainSec % 60).padStart(2, '0')}
-          </span>
-        )}
+        {playing && deadlineLocal != null && <TurnTimer deadline={deadlineLocal} />}
       </div>
 
       {/* 테이블 (보드) */}
