@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
 import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
 
@@ -476,7 +476,6 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const [overTarget, setOverTarget] = useState(null); // 멜드 하이라이트
   const [overSlot, setOverSlot] = useState(null); // 슬롯 하이라이트
   const dragRef = useRef(null); // { ids: string[], from: 'rack'|'board' }
-  const initedRef = useRef(false);
 
   const myHand = useMemo(
     () => (Array.isArray(state.myHand) ? state.myHand : []),
@@ -515,22 +514,14 @@ export default function Game({ state, me, actions, reject, nudged }) {
     saveRackPos(storageKey, rackPos);
   }, [storageKey, rackPos]);
 
-  // 내 턴 진입 시 draft 초기화 (턴 중엔 유지)
+  // 내 턴 진입 시 draft 초기화. "draft가 없다"는 사실 자체가 턴 진입 직후라는 뜻이라
+  // 별도 플래그 없이 턴 중엔 유지되고, 턴이 끝나면 비운다.
   useEffect(() => {
-    if (!playing) {
+    if (!playing || !isMyTurn) {
       setDraftBoard(null);
-      initedRef.current = false;
       return;
     }
-    if (isMyTurn) {
-      if (!initedRef.current) {
-        setDraftBoard(clone(Array.isArray(state.board) ? state.board : []));
-        initedRef.current = true;
-      }
-    } else {
-      initedRef.current = false;
-      setDraftBoard(null);
-    }
+    setDraftBoard((d) => d ?? clone(Array.isArray(state.board) ? state.board : []));
   }, [playing, isMyTurn, state]);
 
   // 렌더링할 보드 (방어적으로 형태 필터)
@@ -700,68 +691,75 @@ export default function Game({ state, me, actions, reject, nudged }) {
     setTimeout(() => wrap.remove(), 0); // 스냅샷은 dragstart 시점에 찍히므로 바로 제거 가능
   };
 
-  const onDragStartRack = (e, tile) => {
-    let ids = [tile.id];
-    if (e.shiftKey) {
-      const b = blockOf(tile.id);
-      if (b) ids = b.map((t) => t.id);
-    }
-    dragRef.current = { ids, from: 'rack' };
+  // 드래그 시작 공통부 (dragRef 설정·드래그 데이터·원자리 반투명)
+  const beginDrag = (e, ids, from) => {
+    dragRef.current = { ids, from };
     e.dataTransfer.effectAllowed = 'move';
     try {
       e.dataTransfer.setData('text/plain', ids.join(','));
     } catch {
       /* noop */
     }
-    if (ids.length > 1) setBlockDragImage(e, ids);
     setDragGhostIds(new Set(ids));
   };
-  const onDragStartBoard = (e, tile) => {
-    dragRef.current = { ids: [tile.id], from: 'board' };
-    e.dataTransfer.effectAllowed = 'move';
-    try {
-      e.dataTransfer.setData('text/plain', tile.id);
-    } catch {
-      /* noop */
+  const onDragStartRack = (e, tile) => {
+    let ids = [tile.id];
+    if (e.shiftKey) {
+      const b = blockOf(tile.id);
+      if (b) ids = b.map((t) => t.id);
     }
-    setDragGhostIds(new Set([tile.id]));
+    beginDrag(e, ids, 'rack');
+    if (ids.length > 1) setBlockDragImage(e, ids);
   };
-  const onDragEnd = () => {
-    dragRef.current = null;
+  const onDragStartBoard = (e, tile) => beginDrag(e, [tile.id], 'board');
+
+  // 드래그 시각 효과 해제 (하이라이트·반투명)
+  const clearDragFx = useCallback(() => {
     setOverTarget(null);
     setOverSlot(null);
     setDragGhostIds(null);
+  }, []);
+
+  // 드래그 상태를 원자적으로 소비·정리 — 모든 드롭 경로가 여기를 거친다.
+  // (예전엔 핸들러마다 복붙이라 하이라이트 잔상 같은 누락 버그가 났음)
+  const takeDrag = () => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    clearDragFx(); // 드롭으로 원본 노드가 사라지면 dragend가 안 와서 여기서 해제
+    if (drag) skipFlipRef.current = new Set(drag.ids);
+    return drag;
+  };
+
+  const onDragEnd = () => {
+    dragRef.current = null;
+    clearDragFx();
   };
 
   // 안전망: 드롭으로 원본 노드가 사라지면 dragend가 그 노드에 안 올 수 있다.
   // 어떤 경로로 드래그가 끝나든 창 수준에서 반투명·하이라이트를 확실히 해제.
   useEffect(() => {
-    const clearDragFx = () => {
-      setDragGhostIds(null);
-      setOverSlot(null);
-      setOverTarget(null);
-    };
     window.addEventListener('dragend', clearDragFx);
     window.addEventListener('drop', clearDragFx);
     return () => {
       window.removeEventListener('dragend', clearDragFx);
       window.removeEventListener('drop', clearDragFx);
     };
-  }, []);
+  }, [clearDragFx]);
 
   const handById = useMemo(() => new Map(myHand.map((t) => [t.id, t])), [myHand]);
+
+  // 드래그 출처에서 실제 타일 목록을 꺼낸다 (board면 draft에서 빼내고, rack이면 손패 매핑)
+  const tilesFromDrag = (d, drag) =>
+    drag.from === 'board'
+      ? [extractFromBoard(d, drag.ids[0])].filter(Boolean)
+      : drag.ids.map((id) => handById.get(id)).filter(Boolean);
 
   // 슬롯에 드롭 (손패 안 이동 or 보드→손패 회수)
   const dropOnSlot = (e, r, c) => {
     e.preventDefault();
     e.stopPropagation();
-    setOverSlot(null);
-    setOverTarget(null);
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDragGhostIds(null); // 드롭으로 원본 노드가 사라지면 dragend가 안 와서 여기서 해제
+    const drag = takeDrag();
     if (!drag) return;
-    skipFlipRef.current = new Set(drag.ids);
 
     if (drag.from === 'board') {
       // 내 손패 타일만 회수 가능 (테이블 타일은 규칙상 불가)
@@ -811,13 +809,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const dropIntoMeld = (e, meldId) => {
     e.preventDefault();
     e.stopPropagation(); // 펠트(새 조합 생성) 핸들러로 버블링 방지
-    setOverTarget(null);
-    setOverSlot(null); // 드래그 시작 슬롯의 하이라이트 잔상 제거
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDragGhostIds(null);
+    const drag = takeDrag();
     if (!drag || !isMyTurn || !draftBoard) return;
-    skipFlipRef.current = new Set(drag.ids);
     const anchor = getDropAnchor(e.currentTarget, e.clientX);
     if (drag.ids.length === 1 && anchor === drag.ids[0]) return;
     // 1장짜리 멜드의 그 타일을 같은 멜드에 다시 놓는 건 제자리(멜드가 끝으로 점프하는 버그 방지)
@@ -827,15 +820,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
     }
 
     applyDraft((d) => {
-      let tiles = [];
-      if (drag.from === 'board') {
-        const t = extractFromBoard(d, drag.ids[0]);
-        if (!t) return false;
-        tiles = [t];
-      } else {
-        tiles = drag.ids.map((id) => handById.get(id)).filter(Boolean);
-        if (!tiles.length) return false;
-      }
+      const tiles = tilesFromDrag(d, drag);
+      if (!tiles.length) return false;
       const target = d.find((m) => m.id === meldId);
       if (!target) {
         d.push({ id: newMeldId(), tiles });
@@ -853,15 +839,8 @@ export default function Game({ state, me, actions, reject, nudged }) {
     const id = newMeldId();
     if (seedPos) meldPosRef.current.set(id, seedPos);
     applyDraft((d) => {
-      let tiles = [];
-      if (drag.from === 'board') {
-        const t = extractFromBoard(d, drag.ids[0]);
-        if (!t) return false;
-        tiles = [t];
-      } else {
-        tiles = drag.ids.map((tid) => handById.get(tid)).filter(Boolean);
-        if (!tiles.length) return false;
-      }
+      const tiles = tilesFromDrag(d, drag);
+      if (!tiles.length) return false;
       d.push({ id, tiles });
       return true;
     });
@@ -870,26 +849,16 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const dropIntoNewMeld = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setOverTarget(null);
-    setOverSlot(null);
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDragGhostIds(null);
+    const drag = takeDrag();
     if (!drag || !isMyTurn || !draftBoard) return;
-    skipFlipRef.current = new Set(drag.ids);
     createMeldFromDrag(drag, boardLayout ? boardLayout.newSpot : null);
   };
 
   // 빈 펠트에 드롭 → 떨어뜨린 그 자리에 새 조합 (멜드 위 드롭은 각 멜드가 stopPropagation)
   const dropOnFelt = (e) => {
     e.preventDefault();
-    setOverTarget(null);
-    setOverSlot(null);
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDragGhostIds(null);
+    const drag = takeDrag();
     if (!drag || !isMyTurn || !draftBoard || !boardMetrics || !meldsRef.current) return;
-    skipFlipRef.current = new Set(drag.ids);
     const rect = meldsRef.current.getBoundingClientRect();
     const count = drag.from === 'board' ? 1 : drag.ids.length;
     const w = meldW(count, boardMetrics.tw);
