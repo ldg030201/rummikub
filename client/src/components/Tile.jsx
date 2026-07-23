@@ -1,10 +1,9 @@
 // 타일 하나 렌더링
-export default function Tile({ tile, draggable, onDragStart, onDragEnd, ghost, small, ready }) {
+export default function Tile({ tile, draggable, onDragStart, onDragEnd, ghost, ready }) {
   const cls = ['tile'];
   if (tile.joker) cls.push('joker');
   else cls.push(`c-${tile.color}`);
   if (ghost) cls.push('ghost');
-  if (small) cls.push('small');
   if (ready) cls.push('ready');
 
   return (
