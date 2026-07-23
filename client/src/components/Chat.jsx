@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 
-// 이름 → 고정 색 (해시 기반)
+// 이름 → 고정 색 (해시 기반). 기본 테마용 (엑셀 모드는 셀 안 검정 텍스트).
 function nameColor(name) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360;
@@ -9,7 +9,7 @@ function nameColor(name) {
 
 // memo: 서버 state 브로드캐스트(상대 드래그 draft 스트림 포함)마다 채팅 200행이
 // 재렌더되지 않게 — props는 채팅 수신·턴 전환 때만 바뀐다.
-function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
+function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel }) {
   const [text, setText] = useState('');
   const [coolLeft, setCoolLeft] = useState(0); // 재촉 쿨타임 남은 초 (서버도 5초 검증)
   const listRef = useRef(null);
@@ -52,22 +52,49 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
   return (
     <aside className="chat">
       <div className="chat-title">
-        <span>💬 채팅</span>
+        <span>{excel ? '📝 메모' : '💬 채팅'}</span>
         {nudgeEnabled && (
           <button
             className="nudge-btn"
             onClick={nudge}
             disabled={!connected || coolLeft > 0}
-            title="현재 턴 플레이어 재촉하기"
+            title={excel ? '현재 편집자에게 알림' : '현재 턴 플레이어 재촉하기'}
           >
-            👉 재촉{coolLeft > 0 ? ` (${coolLeft})` : ''}
+            {excel ? '🔔 알림' : '👉 재촉'}
+            {coolLeft > 0 ? ` (${coolLeft})` : ''}
           </button>
         )}
       </div>
-      <div className="chat-list" ref={listRef} onScroll={onScroll}>
-        {messages.length === 0 && <div className="chat-empty muted">아직 메시지가 없어</div>}
-        {messages.map((m, i) =>
-          m.system ? (
+      <div className={`chat-list ${excel ? 'xl-chat' : ''}`} ref={listRef} onScroll={onScroll}>
+        {messages.length === 0 && (
+          <div className="chat-empty muted">
+            {excel ? '표시할 메모가 없습니다' : '아직 메시지가 없어'}
+          </div>
+        )}
+        {/* 엑셀 모드: 카카오톡 엑셀 위장처럼 각 메시지를 스프레드시트 행(셀)으로 */}
+        {excel && messages.length > 0 && (
+          <div className="xl-chat-head">
+            <span className="xl-chat-rownum" />
+            <span>이름</span>
+            <span>내용</span>
+          </div>
+        )}
+        {messages.map((m, i) => {
+          if (excel) {
+            return m.system ? (
+              <div key={i} className="xl-chat-row sys">
+                <span className="xl-chat-rownum">{i + 1}</span>
+                <span className="xl-chat-merged">{m.text}</span>
+              </div>
+            ) : (
+              <div key={i} className={`xl-chat-row ${m.senderId === myId ? 'mine' : ''}`}>
+                <span className="xl-chat-rownum">{i + 1}</span>
+                <span className="xl-chat-cell name">{m.name}</span>
+                <span className="xl-chat-cell text">{m.text}</span>
+              </div>
+            );
+          }
+          return m.system ? (
             <div key={i} className="chat-sys">
               {m.text}
             </div>
@@ -78,19 +105,19 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled }) {
               </span>
               <span className="chat-text">{m.text}</span>
             </div>
-          )
-        )}
+          );
+        })}
       </div>
       <form className="chat-form" onSubmit={submit}>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={connected ? '메시지 입력...' : '연결 중...'}
+          placeholder={connected ? (excel ? '메모 입력...' : '메시지 입력...') : '연결 중...'}
           maxLength={200}
           disabled={!connected}
         />
         <button type="submit" className="primary sm" disabled={!connected}>
-          전송
+          {excel ? '입력' : '전송'}
         </button>
       </form>
     </aside>

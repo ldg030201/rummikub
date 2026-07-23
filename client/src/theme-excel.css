@@ -493,3 +493,76 @@
   background: var(--xl-green);
   border: 1px solid var(--xl-green-dark);
 }
+
+/* ============ 채팅 → 카카오톡 엑셀 모드: 메시지 = 스프레드시트 행 ============ */
+:root[data-theme='excel'] .chat-title {
+  background: var(--xl-header-bg);
+  border-bottom: 1px solid var(--xl-grid);
+}
+:root[data-theme='excel'] .chat-list.xl-chat {
+  padding: 0;
+  gap: 0;
+}
+.xl-chat-head,
+.xl-chat-row {
+  display: grid;
+  grid-template-columns: 30px 78px 1fr;
+  font-size: 12px;
+}
+/* 열 머리글 행 (스크롤해도 고정) */
+.xl-chat-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--xl-header-bg);
+  color: var(--xl-header-text);
+  font-weight: 600;
+}
+.xl-chat-head > span {
+  padding: 3px 8px;
+  border-right: 1px solid var(--xl-grid);
+  border-bottom: 1px solid var(--xl-grid-strong);
+  text-align: center;
+}
+/* 행 번호 거터 (왼쪽 회색 셀) */
+.xl-chat-rownum {
+  background: var(--xl-header-bg);
+  color: var(--xl-header-text);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border-right: 1px solid var(--xl-grid);
+  border-bottom: 1px solid var(--xl-grid);
+  padding: 3px 2px;
+}
+.xl-chat-cell {
+  padding: 3px 8px;
+  border-right: 1px solid var(--xl-grid);
+  border-bottom: 1px solid var(--xl-grid);
+  color: #000;
+  overflow: hidden;
+}
+.xl-chat-cell.name {
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.xl-chat-cell.text {
+  white-space: normal;
+  word-break: break-word;
+}
+.xl-chat-row.mine .xl-chat-cell.text {
+  background: var(--xl-sel-fill);
+}
+/* 시스템 메시지 = 병합 셀(이름+내용 열 통합), 옅은 강조 */
+.xl-chat-merged {
+  grid-column: 2 / 4;
+  padding: 3px 8px;
+  color: var(--muted);
+  background: #fbf7e7;
+  border-right: 1px solid var(--xl-grid);
+  border-bottom: 1px solid var(--xl-grid);
+  word-break: break-word;
+}
+:root[data-theme='excel'] .chat-empty {
+  margin: 10px;
+}
