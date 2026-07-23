@@ -1,0 +1,8 @@
+**/node_modules
+client/dist
+.git
+.github
+.claude
+.idea
+*.log
+.DS_Store

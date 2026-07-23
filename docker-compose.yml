@@ -1,0 +1,9 @@
+# docker compose up -d 한 줄로 실행 (기본 http://localhost:8123)
+# 포트 변경: HOST_PORT=8091 docker compose up -d
+services:
+  rummikub:
+    build: .
+    image: ghcr.io/ldg030201/rummikub:latest
+    ports:
+      - "${HOST_PORT:-8123}:8123"
+    restart: unless-stopped
