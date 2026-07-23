@@ -50,7 +50,7 @@ export default function App() {
         <div className="brand">
           {excel ? (
             <>
-              <span className="brand-tile">X</span> 2024_4분기_실적_보고_최종.xlsx
+              <span className="brand-tile">X</span> 통합 문서1
               <span className="muted xl-suffix"> — Excel</span>
             </>
           ) : (
