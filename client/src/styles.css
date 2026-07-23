@@ -232,11 +232,16 @@ body {
   :root {
     --slot-w: 34px;
     --slot-h: 46px;
+    --btile-w: 28px;
+    --btile-h: 38px;
   }
   .tile {
     width: 30px;
     height: 42px;
     font-size: 17px;
+  }
+  .meld .tile {
+    font-size: 14px;
   }
   .rack-grid {
     gap: 3px;
@@ -691,6 +696,8 @@ button:disabled {
 /* 테이블(펠트) */
 .table-area {
   position: relative; /* 뽑기 더미 배치 기준 */
+  display: flex;
+  flex-direction: column;
   background: radial-gradient(120% 100% at 50% 15%, #1a6b47 0%, var(--felt) 45%, var(--felt-2) 100%);
   border-radius: 14px;
   padding: 16px;
@@ -701,25 +708,35 @@ button:disabled {
 .empty-table {
   color: rgba(255, 255, 255, 0.5);
   text-align: center;
-  padding: 60px 0;
+  padding: 40px 0 0;
 }
+/* 멜드 고정 배치: 각 멜드는 절대좌표(Game.jsx layoutMelds 계산)에 앉는다.
+   상수(패딩 6, 보더 2, 타일 간격 3, 멜드 간격 10)는 JS와 동기화 필요 */
 .melds {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-content: flex-start;
-  padding-right: 64px; /* 뽑기 더미 자리 확보 */
+  position: relative;
+  flex: 1;
+}
+:root {
+  --btile-w: 36px;
+  --btile-h: 48px;
 }
 .meld {
+  position: absolute;
   display: flex;
   gap: 3px;
-  padding: 8px;
+  padding: 6px;
   background: rgba(0, 0, 0, 0.18);
   border-radius: 10px;
   border: 2px solid transparent;
-  min-height: 66px;
   animation: tile-in 0.18s ease;
   transition: border-color 0.15s ease, background 0.15s ease;
+}
+/* 보드 타일은 손패보다 살짝 작게 — 한 줄에 더 많이, 재배치 덜 나게 */
+.meld .tile {
+  width: var(--btile-w);
+  height: var(--btile-h);
+  font-size: 19px;
+  border-bottom-width: 2px;
 }
 .meld.valid {
   border-color: rgba(34, 197, 94, 0.5);
@@ -741,7 +758,6 @@ button:disabled {
   color: rgba(255, 255, 255, 0.6);
   border: 2px dashed rgba(255, 255, 255, 0.35);
   background: transparent;
-  min-width: 100px;
   font-size: 13px;
 }
 

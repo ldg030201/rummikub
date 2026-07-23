@@ -221,6 +221,77 @@ function extractFromBoard(board, tileId) {
   return null;
 }
 
+// ---- 보드 멜드 고정 배치 (주차장 모델) ----
+// 실제 테이블처럼 한 번 놓인 조합은 제자리를 지킨다.
+// meldId → {row, x}를 기억해두고(없어진 멜드 것도 유지 — 되돌리기로 살아나면 제자리 복귀),
+// 자기 자리에 못 들어가게 됐을 때만 그 멜드 하나를 가까운 빈 자리로 옮긴다.
+// 상수는 styles.css의 .meld / --btile-* 와 맞춰야 함.
+const MELD_PAD = 6;
+const MELD_BORDER = 2;
+const MELD_TILE_GAP = 3;
+const MELD_GAP = 10; // 멜드 사이 최소 간격
+const meldW = (len, tw) =>
+  MELD_PAD * 2 + MELD_BORDER * 2 + len * tw + Math.max(0, len - 1) * MELD_TILE_GAP;
+
+function layoutMelds(board, posMap, width, tw) {
+  const rows = []; // rows[r] = 점유 구간 [x0,x1][]
+  const fits = (r, x, w) => {
+    if (x < 0 || x + w > width) return false;
+    const iv = rows[r];
+    return !iv || iv.every(([a, b]) => x + w + MELD_GAP <= a || x >= b + MELD_GAP);
+  };
+  const occupy = (r, x, w) => {
+    (rows[r] ||= []).push([x, x + w]);
+  };
+  const firstFit = (w) => {
+    for (let r = 0; ; r += 1) {
+      if (!rows[r]) return { row: r, x: 0 }; // 빈 줄 (폭보다 긴 멜드도 여기 강제 배치)
+      const cands = [0, ...rows[r].map(([, b]) => b + MELD_GAP)].sort((a, b) => a - b);
+      for (const x of cands) if (fits(r, x, w)) return { row: r, x };
+    }
+  };
+
+  const stored = board.filter((m) => posMap.has(m.id));
+  const fresh = board.filter((m) => !posMap.has(m.id));
+  // 왼쪽·위쪽에 있던 멜드가 자리 우선권을 가짐
+  stored.sort((a, b) => {
+    const pa = posMap.get(a.id);
+    const pb = posMap.get(b.id);
+    return pa.row - pb.row || pa.x - pb.x;
+  });
+
+  const placed = new Map();
+  const bumped = [];
+  const step = tw + MELD_TILE_GAP;
+  for (const m of stored) {
+    const p = posMap.get(m.id);
+    const w = meldW(m.tiles.length, tw);
+    let x = null;
+    // 제자리 → 안 되면 좌우로 한두 칸 밀어서라도 근처 유지
+    for (const cand of [p.x, p.x - step, p.x + step, p.x - step * 2, p.x + step * 2]) {
+      if (fits(p.row, cand, w)) {
+        x = cand;
+        break;
+      }
+    }
+    if (x != null) {
+      occupy(p.row, x, w);
+      placed.set(m.id, { row: p.row, x });
+    } else bumped.push(m);
+  }
+  for (const m of [...bumped, ...fresh]) {
+    const w = meldW(m.tiles.length, tw);
+    const spot = firstFit(w);
+    occupy(spot.row, spot.x, w);
+    placed.set(m.id, spot);
+  }
+
+  let maxRow = -1;
+  for (const { row } of placed.values()) if (row > maxRow) maxRow = row;
+  const newSpot = firstFit(meldW(3, tw)); // "+ 새 조합" 놓일 자리 (점유는 안 함)
+  return { placed, rowCount: maxRow + 1, newSpot };
+}
+
 // 타일 뒷면 하나를 from→to로 날린다 (상대가 더미에서 뽑는 연출)
 function flyTileBack(from, to) {
   const el = document.createElement('div');
@@ -282,7 +353,10 @@ export default function Game({ state, me, actions, reject, nudged }) {
     const prev = prevRectsRef.current;
     const skip = skipFlipRef.current;
     const firstRun = firstFlipRef.current;
-    firstFlipRef.current = false;
+    // 보드 멜드는 폭 측정 후(두 번째 렌더부터) 그려지므로, 멜드가 실제로 DOM에
+    // 나타난 렌더까지를 "첫 렌더"로 취급한다 (재접속 시 보드 전체가 좌석에서 날아오는 것 방지)
+    const boardReady = board.length === 0 || !!root.querySelector('.meld');
+    if (boardReady) firstFlipRef.current = false;
     skipFlipRef.current = new Set();
 
     const next = new Map();
@@ -462,6 +536,45 @@ export default function Game({ state, me, actions, reject, nudged }) {
   // 렌더링할 보드 (방어적으로 형태 필터)
   const rawBoard = isMyTurn && draftBoard ? draftBoard : state.board;
   const board = Array.isArray(rawBoard) ? rawBoard.filter((m) => m && Array.isArray(m.tiles)) : [];
+
+  // ---- 보드 고정 배치: 폭 측정 + 멜드 자리 계산 ----
+  const meldsRef = useRef(null);
+  const meldPosRef = useRef(new Map()); // meldId -> {row, x} (게임 내내 유지)
+  const [boardMetrics, setBoardMetrics] = useState(null);
+  useEffect(() => {
+    const el = meldsRef.current;
+    if (!el) return undefined;
+    const compute = () => {
+      const cs = getComputedStyle(el);
+      const tw = parseFloat(cs.getPropertyValue('--btile-w')) || 36;
+      const th = parseFloat(cs.getPropertyValue('--btile-h')) || 48;
+      const meldH = th + MELD_PAD * 2 + MELD_BORDER * 2;
+      setBoardMetrics({
+        // 오른쪽 아래 뽑기 더미 자리만큼 빼고 씀
+        width: Math.max(140, el.clientWidth - 70),
+        tw,
+        meldH,
+        rowH: meldH + MELD_GAP,
+      });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const boardLayout = useMemo(() => {
+    if (!boardMetrics) return null;
+    return layoutMelds(board, meldPosRef.current, boardMetrics.width, boardMetrics.tw);
+    // board는 매 렌더 새 배열이지만 layoutMelds가 결정적이라 재계산 비용만 있고 결과는 안정적
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawBoard, boardMetrics]);
+
+  // 계산된 자리를 기억 (없어진 멜드 것도 남겨둠 — 되돌리기 시 제자리 복귀)
+  useEffect(() => {
+    if (!boardLayout) return;
+    for (const [id, p] of boardLayout.placed) meldPosRef.current.set(id, p);
+  }, [boardLayout]);
 
   // draft 보드에 올라간 내 손패 타일 (손패에서 숨김, 슬롯은 예약 유지)
   const hiddenIds = useMemo(() => {
@@ -697,6 +810,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
   // 멜드에 드롭 (블럭이면 통째로)
   const dropIntoMeld = (e, meldId) => {
     e.preventDefault();
+    e.stopPropagation(); // 펠트(새 조합 생성) 핸들러로 버블링 방지
     setOverTarget(null);
     setOverSlot(null); // 드래그 시작 슬롯의 하이라이트 잔상 제거
     const drag = dragRef.current;
@@ -734,15 +848,10 @@ export default function Game({ state, me, actions, reject, nudged }) {
     });
   };
 
-  const dropIntoNewMeld = (e) => {
-    e.preventDefault();
-    setOverTarget(null);
-    setOverSlot(null);
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDragGhostIds(null);
-    if (!drag || !isMyTurn || !draftBoard) return;
-    skipFlipRef.current = new Set(drag.ids);
+  // 새 조합 만들기 (드래그한 타일들로). seedPos를 주면 그 자리(행·x)에 앉힌다.
+  const createMeldFromDrag = (drag, seedPos) => {
+    const id = newMeldId();
+    if (seedPos) meldPosRef.current.set(id, seedPos);
     applyDraft((d) => {
       let tiles = [];
       if (drag.from === 'board') {
@@ -750,12 +859,44 @@ export default function Game({ state, me, actions, reject, nudged }) {
         if (!t) return false;
         tiles = [t];
       } else {
-        tiles = drag.ids.map((id) => handById.get(id)).filter(Boolean);
+        tiles = drag.ids.map((tid) => handById.get(tid)).filter(Boolean);
         if (!tiles.length) return false;
       }
-      d.push({ id: newMeldId(), tiles });
+      d.push({ id, tiles });
       return true;
     });
+  };
+
+  const dropIntoNewMeld = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOverTarget(null);
+    setOverSlot(null);
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDragGhostIds(null);
+    if (!drag || !isMyTurn || !draftBoard) return;
+    skipFlipRef.current = new Set(drag.ids);
+    createMeldFromDrag(drag, boardLayout ? boardLayout.newSpot : null);
+  };
+
+  // 빈 펠트에 드롭 → 떨어뜨린 그 자리에 새 조합 (멜드 위 드롭은 각 멜드가 stopPropagation)
+  const dropOnFelt = (e) => {
+    e.preventDefault();
+    setOverTarget(null);
+    setOverSlot(null);
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDragGhostIds(null);
+    if (!drag || !isMyTurn || !draftBoard || !boardMetrics || !meldsRef.current) return;
+    skipFlipRef.current = new Set(drag.ids);
+    const rect = meldsRef.current.getBoundingClientRect();
+    const count = drag.from === 'board' ? 1 : drag.ids.length;
+    const w = meldW(count, boardMetrics.tw);
+    const row = Math.max(0, Math.floor((e.clientY - rect.top) / boardMetrics.rowH));
+    const x = Math.max(0, Math.min(e.clientX - rect.left - w / 2, boardMetrics.width - w));
+    // 겹치면 layoutMelds의 근처 보정(±1~2칸)·첫 빈 자리 규칙이 알아서 정리
+    createMeldFromDrag(drag, { row, x });
   };
 
   // ---- 버튼 ----
@@ -835,47 +976,70 @@ export default function Game({ state, me, actions, reject, nudged }) {
         </div>
 
         {board.length === 0 && <div className="empty-table">아직 놓인 조합이 없어</div>}
-        <div className="melds">
-          {board.map((m) => {
-            const valid = m.tiles.length >= 3 && isValidMeld(m.tiles);
-            return (
-              <div
-                key={m.id}
-                className={[
-                  'meld',
-                  valid ? 'valid' : 'invalid',
-                  overTarget === m.id ? 'over' : '',
-                  rejectMeldId === m.id ? 'reject' : '',
-                ].join(' ')}
-                onDragOver={
-                  isMyTurn
-                    ? (e) => {
-                        e.preventDefault();
-                        if (overTarget !== m.id) setOverTarget(m.id);
-                      }
-                    : undefined
-                }
-                onDrop={isMyTurn ? (e) => dropIntoMeld(e, m.id) : undefined}
-              >
-                {m.tiles.map((t) => (
-                  <Tile
-                    key={t.id}
-                    tile={t}
-                    draggable={isMyTurn}
-                    onDragStart={onDragStartBoard}
-                    onDragEnd={onDragEnd}
-                    ghost={dragGhostIds?.has(t.id)}
-                  />
-                ))}
-              </div>
-            );
-          })}
+        <div
+          className="melds"
+          ref={meldsRef}
+          style={
+            boardLayout && boardMetrics
+              ? { minHeight: Math.max(1, boardLayout.rowCount + 1) * boardMetrics.rowH }
+              : undefined
+          }
+          onDragOver={isMyTurn ? (e) => e.preventDefault() : undefined}
+          onDrop={isMyTurn ? dropOnFelt : undefined}
+        >
+          {boardLayout &&
+            boardMetrics &&
+            board.map((m) => {
+              const p = boardLayout.placed.get(m.id);
+              if (!p) return null;
+              const valid = m.tiles.length >= 3 && isValidMeld(m.tiles);
+              return (
+                <div
+                  key={m.id}
+                  style={{ left: p.x, top: p.row * boardMetrics.rowH }}
+                  className={[
+                    'meld',
+                    valid ? 'valid' : 'invalid',
+                    overTarget === m.id ? 'over' : '',
+                    rejectMeldId === m.id ? 'reject' : '',
+                  ].join(' ')}
+                  onDragOver={
+                    isMyTurn
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (overTarget !== m.id) setOverTarget(m.id);
+                        }
+                      : undefined
+                  }
+                  onDrop={isMyTurn ? (e) => dropIntoMeld(e, m.id) : undefined}
+                >
+                  {m.tiles.map((t) => (
+                    <Tile
+                      key={t.id}
+                      tile={t}
+                      draggable={isMyTurn}
+                      onDragStart={onDragStartBoard}
+                      onDragEnd={onDragEnd}
+                      ghost={dragGhostIds?.has(t.id)}
+                    />
+                  ))}
+                </div>
+              );
+            })}
 
-          {isMyTurn && (
+          {isMyTurn && boardLayout && boardMetrics && (
             <div
               className={`meld new-meld ${overTarget === 'new' ? 'over' : ''}`}
+              style={{
+                left: boardLayout.newSpot.x,
+                top: boardLayout.newSpot.row * boardMetrics.rowH,
+                width: meldW(3, boardMetrics.tw),
+                height: boardMetrics.meldH,
+              }}
               onDragOver={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 if (overTarget !== 'new') setOverTarget('new');
               }}
               onDrop={dropIntoNewMeld}
