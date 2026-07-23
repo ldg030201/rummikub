@@ -7,6 +7,17 @@
 React + Vite 프론트엔드와 Node.js(`ws`) 실시간 서버로 만든 **온라인 실시간 멀티플레이 루미큐브**.
 서버 하나 켜고 주소만 공유하면 친구들이 같은 방에 들어와 바로 플레이할 수 있어. 별도 가입·DB 없음.
 
+<p align="center">
+  <img src="docs/screenshot-game.png" alt="게임 화면 — 테이블 위 조합, 손패 랙, 실시간 채팅" width="900">
+</p>
+
+<details>
+<summary>📷 대기실 화면 보기 (방 설정: 턴 시간·인원·타일 세트)</summary>
+<p align="center">
+  <img src="docs/screenshot-lobby.png" alt="대기실 화면 — 방 코드 공유와 게임 설정" width="700">
+</p>
+</details>
+
 ## 특징
 
 - **실시간 동기화** (WebSocket) — 내 턴에 타일을 옮기는 과정이 다른 사람 화면에 실시간 관전으로 보임
