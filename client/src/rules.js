@@ -4,6 +4,16 @@
 const MIN_NUM = 1;
 const MAX_NUM = 13;
 
+export const INITIAL_MELD_MIN = 30; // 첫 등록(브레이크인) 최소 점수
+
+// 런의 시작값 추정: 첫 실제 타일 기준, index i 위치의 값은 start + i. 전부 조커면 null.
+function runStart(tiles) {
+  for (let i = 0; i < tiles.length; i += 1) {
+    if (!tiles[i].joker) return tiles[i].num - i;
+  }
+  return null;
+}
+
 export function isGroup(tiles) {
   if (tiles.length < 3 || tiles.length > 4) return false;
   const reals = tiles.filter((t) => !t.joker);
@@ -21,13 +31,7 @@ export function isRun(tiles) {
   if (reals.length === 0) return false;
   const color = reals[0].color;
   if (reals.some((t) => t.color !== color)) return false;
-  let start = null;
-  for (let i = 0; i < tiles.length; i += 1) {
-    if (!tiles[i].joker) {
-      start = tiles[i].num - i;
-      break;
-    }
-  }
+  const start = runStart(tiles);
   if (start === null) return false;
   if (start < MIN_NUM) return false;
   if (start + tiles.length - 1 > MAX_NUM) return false;
@@ -49,13 +53,7 @@ export function meldValue(tiles) {
     best = Math.max(best, reals[0].num * tiles.length);
   }
   if (isRun(tiles)) {
-    let start = null;
-    for (let i = 0; i < tiles.length; i += 1) {
-      if (!tiles[i].joker) {
-        start = tiles[i].num - i;
-        break;
-      }
-    }
+    const start = runStart(tiles);
     let sum = 0;
     for (let i = 0; i < tiles.length; i += 1) sum += start + i;
     best = Math.max(best, sum);

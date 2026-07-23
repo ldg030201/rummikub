@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
-import { isValidMeld, meldValue } from '../rules.js';
+import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
 
 // 유틸
 const clone = (v) =>
@@ -932,9 +932,9 @@ export default function Game({ state, me, actions, reject, nudged }) {
           <span>{currentPlayer ? `${currentPlayer.name} 님의 차례` : '대기 중'}</span>
         )}
         {/* 30점을 채우면(등록 조건 완성) 숨김 — 회수해서 다시 모자라면 재표시 */}
-        {!state.brokeIn && isMyTurn && (initialSum ?? 0) < 30 && (
+        {!state.brokeIn && isMyTurn && (initialSum ?? 0) < INITIAL_MELD_MIN && (
           <span className="initial-hint">
-            첫 등록 필요: <b className="no">{initialSum ?? 0}</b> / 30
+            첫 등록 필요: <b className="no">{initialSum ?? 0}</b> / {INITIAL_MELD_MIN}
           </span>
         )}
         {playing && remainSec != null && (

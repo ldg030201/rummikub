@@ -28,6 +28,14 @@ export function isGroup(tiles) {
   return true;
 }
 
+// 런의 시작값 추정: 첫 실제 타일 기준, index i 위치의 값은 start + i. 전부 조커면 null.
+function runStart(tiles) {
+  for (let i = 0; i < tiles.length; i += 1) {
+    if (!tiles[i].joker) return tiles[i].num - i;
+  }
+  return null;
+}
+
 // 런인지: 같은 색, 주어진 순서대로 연속 증가, 3개 이상, 1~13 범위, wrap 불가
 export function isRun(tiles) {
   if (!Array.isArray(tiles)) return false;
@@ -37,14 +45,7 @@ export function isRun(tiles) {
   const color = reals[0].color;
   if (reals.some((t) => t.color !== color)) return false; // 색 모두 동일
 
-  // 첫 실제 타일로 시작값 s 추정: index i 위치의 값은 s + i
-  let start = null;
-  for (let i = 0; i < tiles.length; i += 1) {
-    if (!tiles[i].joker) {
-      start = tiles[i].num - i;
-      break;
-    }
-  }
+  const start = runStart(tiles);
   if (start === null) return false;
   // 범위 검사
   if (start < MIN_NUM) return false;
@@ -70,13 +71,7 @@ export function meldValue(tiles) {
     best = Math.max(best, reals[0].num * tiles.length); // 그룹은 모두 같은 숫자
   }
   if (isRun(tiles)) {
-    let start = null;
-    for (let i = 0; i < tiles.length; i += 1) {
-      if (!tiles[i].joker) {
-        start = tiles[i].num - i;
-        break;
-      }
-    }
+    const start = runStart(tiles);
     let sum = 0;
     for (let i = 0; i < tiles.length; i += 1) sum += start + i;
     best = Math.max(best, sum);
@@ -130,7 +125,7 @@ function meldKey(meld) {
 // rack: 플레이어의 손패 (Tile[])
 // brokeIn: 이미 첫 등록을 마쳤는지
 //
-// 반환: { ok, reason?, playedTileIds?, newRack?, board? }
+// 반환: { ok, reason?, newRack?, board? }
 //  board: 서버 권위 타일로 재구성된 보드 (game.js가 이걸 저장)
 export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn }) {
   // 0) 형태 검증 (크래시 방지 — 이후 로직은 안전한 board만 다룬다)
@@ -230,7 +225,7 @@ export function validateCommit({ turnStartBoard, proposedBoard, rack, brokeIn })
   const playedSet = new Set(playedTileIds);
   const newRack = rack.filter((t) => !playedSet.has(t.id));
 
-  return { ok: true, playedTileIds, newRack, board: authBoard };
+  return { ok: true, newRack, board: authBoard };
 }
 
 export { INITIAL_MELD_MIN };
