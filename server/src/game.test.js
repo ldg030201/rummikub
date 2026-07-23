@@ -2,9 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room, serializeState, TURN_TIME_MS } from './game.js';
-
-const T = (id, color, num) => ({ id, color, num, joker: false });
-const sock = () => ({ readyState: 1, OPEN: 1, send() {} });
+import { T, sock } from './test-helpers.js';
 
 function twoPlayerRoom() {
   const room = new Room('R1');

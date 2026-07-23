@@ -10,9 +10,7 @@ import {
   validateCommit,
   isBoardShape,
 } from './rules.js';
-
-const T = (id, color, num) => ({ id, color, num, joker: false });
-const J = (id) => ({ id, color: null, num: null, joker: true });
+import { T, J } from './test-helpers.js';
 
 test('그룹: 같은 숫자 다른 색 3개', () => {
   assert.equal(isGroup([T('a', 'red', 7), T('b', 'blue', 7), T('c', 'black', 7)]), true);
