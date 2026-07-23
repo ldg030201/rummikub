@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ss } from './storage.js';
 
 function wsUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
@@ -11,31 +12,6 @@ function wsUrl() {
   const proto = loc.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${loc.host}/ws`;
 }
-
-// 세션 저장 (탭 단위 격리 — localStorage는 탭끼리 공유돼 세션이 꼬임)
-const ss = {
-  get: (k) => {
-    try {
-      return sessionStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  },
-  set: (k, v) => {
-    try {
-      sessionStorage.setItem(k, v);
-    } catch {
-      /* noop */
-    }
-  },
-  del: (k) => {
-    try {
-      sessionStorage.removeItem(k);
-    } catch {
-      /* noop */
-    }
-  },
-};
 
 // 실시간 게임 연결 훅
 export function useRummikub() {
@@ -70,9 +46,7 @@ export function useRummikub() {
     ws.onopen = () => {
       setConnected(true);
       attempts.current = 0; // 성공 시 백오프 리셋
-      if (pending.current) {
-        ws.send(JSON.stringify({ type: 'join', ...pending.current }));
-      }
+      if (pending.current) rawSend({ type: 'join', ...pending.current });
     };
 
     ws.onmessage = (ev) => {
@@ -168,17 +142,21 @@ export function useRummikub() {
     [rawSend, connect]
   );
 
-  const start = useCallback(() => rawSend({ type: 'start' }), [rawSend]);
-  const draw = useCallback(() => rawSend({ type: 'draw' }), [rawSend]);
-  const sendDraft = useCallback((board) => rawSend({ type: 'draft', board }), [rawSend]);
-  const commit = useCallback((board) => rawSend({ type: 'commit', board }), [rawSend]);
-  const newGame = useCallback(() => rawSend({ type: 'newGame' }), [rawSend]);
-  const sendChat = useCallback((text) => rawSend({ type: 'chat', text }), [rawSend]);
-  const nudge = useCallback(() => rawSend({ type: 'nudge' }), [rawSend]);
-  const sendSettings = useCallback(
-    (settings) => rawSend({ type: 'settings', settings }),
-    [rawSend]
-  );
+  // 단순 전송 액션: "{ type, [key]: 인자 }를 보낸다" 패턴 일괄 생성
+  const simpleActions = useMemo(() => {
+    const cmd = (type, key) => (val) => rawSend(key ? { type, [key]: val } : { type });
+    return {
+      start: cmd('start'),
+      draw: cmd('draw'),
+      sendDraft: cmd('draft', 'board'),
+      commit: cmd('commit', 'board'),
+      newGame: cmd('newGame'),
+      sendChat: cmd('chat', 'text'),
+      nudge: cmd('nudge'),
+      sendSettings: cmd('settings', 'settings'),
+    };
+  }, [rawSend]);
+
   const leave = useCallback(() => {
     rawSend({ type: 'leave' });
     ss.del('rk_active');
@@ -199,17 +177,6 @@ export function useRummikub() {
     reject,
     chat,
     nudged,
-    actions: {
-      join,
-      start,
-      draw,
-      sendDraft,
-      commit,
-      newGame,
-      sendChat,
-      nudge,
-      sendSettings,
-      leave,
-    },
+    actions: { join, leave, ...simpleActions },
   };
 }

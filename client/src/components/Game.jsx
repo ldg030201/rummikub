@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
 import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
+import { ls, ss } from '../storage.js';
 
 // 유틸
 const clone = (v) =>
@@ -14,16 +15,12 @@ const COLOR_ORDER = { red: 0, orange: 1, blue: 2, black: 3 };
 // 탭별 식별자 (같은 브라우저의 다른 탭이 손패 배치를 서로 덮어쓰지 않게).
 // sessionStorage라 새로고침엔 유지되고 탭이 다르면 분리됨.
 const TAB_ID = (() => {
-  try {
-    let id = sessionStorage.getItem('rk_tab');
-    if (!id) {
-      id = Math.random().toString(36).slice(2, 8);
-      sessionStorage.setItem('rk_tab', id);
-    }
-    return id;
-  } catch {
-    return 'tab';
+  let id = ss.get('rk_tab');
+  if (!id) {
+    id = Math.random().toString(36).slice(2, 8);
+    ss.set('rk_tab', id);
   }
+  return id || 'tab';
 })();
 
 // ---- 손패 슬롯 배치 ----
@@ -37,11 +34,8 @@ const idxOf = (p, cols) => p.r * cols + p.c;
 
 function loadRackPos(storageKey) {
   try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      const p = JSON.parse(raw);
-      if (p && typeof p === 'object') return p;
-    }
+    const p = JSON.parse(ls.get(storageKey) || 'null');
+    if (p && typeof p === 'object') return p;
   } catch {
     /* noop */
   }
@@ -49,11 +43,7 @@ function loadRackPos(storageKey) {
 }
 
 function saveRackPos(storageKey, pos) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(pos));
-  } catch {
-    /* noop */
-  }
+  ls.set(storageKey, JSON.stringify(pos));
 }
 
 // 손패의 모든 타일이 유일한 슬롯을 갖도록 보정: 기존 위치 유지, 새 타일은 빈 슬롯, 없는 타일 제거
