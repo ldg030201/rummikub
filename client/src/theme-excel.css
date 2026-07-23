@@ -566,3 +566,64 @@
 :root[data-theme='excel'] .chat-empty {
   margin: 10px;
 }
+
+/* ============ 하나의 연속된 시트: 값 셀 + 배경 격자를 합침 ============ */
+/* 손패가 자기만의 흰 패널로 떠 있던 걸 없애고, 배경 시트 위의 '채워진 셀'로.
+   셀 크기를 배경 격자(--xl-cell-*)와 통일해 값 있는 칸/빈 칸이 한 시트로 이어진다. */
+:root[data-theme='excel'] {
+  --xl-cell-w: 48px; /* 전 화면 공통 셀 크기 (배경 격자 = 손패 = 보드) */
+  --xl-cell-h: 36px;
+  --slot-w: 48px;
+  --slot-h: 36px;
+  --btile-w: 48px;
+  --btile-h: 36px;
+}
+
+/* 손패 영역: 흰 패널·테두리·헤더 박스 제거 → 시트에 녹아든다 */
+:root[data-theme='excel'] .rack-area {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+:root[data-theme='excel'] .rack-header {
+  color: var(--xl-header-text);
+  padding: 0 2px 4px;
+}
+:root[data-theme='excel'] .rack-grid {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 0;
+}
+/* 빈 슬롯 = 배경 격자가 그대로 비침(투명). 값 있는 셀만 흰 셀로 채운다 */
+:root[data-theme='excel'] .slot {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+:root[data-theme='excel'] .slot .tile {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border: 1px solid var(--xl-grid);
+  box-shadow: none;
+}
+:root[data-theme='excel'] .slot .tile[draggable='true']:hover {
+  box-shadow: inset 0 0 0 2px var(--xl-sel);
+}
+:root[data-theme='excel'] .tile {
+  font-size: 18px; /* 낮아진 셀 높이에 맞춤 */
+}
+
+/* 턴 배너·빈 테이블 안내도 시트 위 텍스트로 (박스 제거) */
+:root[data-theme='excel'] .turn-banner {
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+}
+:root[data-theme='excel'] .turn-banner.mine {
+  background: transparent;
+  border: none;
+  color: var(--xl-green-dark);
+  font-weight: 700;
+}
