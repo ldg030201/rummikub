@@ -225,20 +225,18 @@ function extractFromBoard(board, tileId) {
 // 실제 테이블처럼 한 번 놓인 조합은 제자리를 지킨다.
 // meldId → {row, x}를 기억해두고(없어진 멜드 것도 유지 — 되돌리기로 살아나면 제자리 복귀),
 // 자기 자리에 못 들어가게 됐을 때만 그 멜드 하나를 가까운 빈 자리로 옮긴다.
-// 상수는 styles.css의 .meld / --btile-* 와 맞춰야 함.
-const MELD_PAD = 6;
-const MELD_BORDER = 2;
-const MELD_TILE_GAP = 3;
-const MELD_GAP = 10; // 멜드 사이 최소 간격
-const meldW = (len, tw) =>
-  MELD_PAD * 2 + MELD_BORDER * 2 + len * tw + Math.max(0, len - 1) * MELD_TILE_GAP;
+// 레이아웃 값(패딩·보더·간격·타일 폭)은 styles.css의 CSS 변수가 원본이고,
+// boardMetrics(m)가 getComputedStyle로 읽어와 여기로 전달된다.
+const meldW = (len, m) =>
+  m.pad * 2 + m.border * 2 + len * m.tw + Math.max(0, len - 1) * m.tileGap;
 
-function layoutMelds(board, posMap, width, tw) {
+function layoutMelds(board, posMap, m) {
+  const { width, meldGap } = m;
   const rows = []; // rows[r] = 점유 구간 [x0,x1][]
   const fits = (r, x, w) => {
     if (x < 0 || x + w > width) return false;
     const iv = rows[r];
-    return !iv || iv.every(([a, b]) => x + w + MELD_GAP <= a || x >= b + MELD_GAP);
+    return !iv || iv.every(([a, b]) => x + w + meldGap <= a || x >= b + meldGap);
   };
   const occupy = (r, x, w) => {
     (rows[r] ||= []).push([x, x + w]);
@@ -246,7 +244,7 @@ function layoutMelds(board, posMap, width, tw) {
   const firstFit = (w) => {
     for (let r = 0; ; r += 1) {
       if (!rows[r]) return { row: r, x: 0 }; // 빈 줄 (폭보다 긴 멜드도 여기 강제 배치)
-      const cands = [0, ...rows[r].map(([, b]) => b + MELD_GAP)].sort((a, b) => a - b);
+      const cands = [0, ...rows[r].map(([, b]) => b + meldGap)].sort((a, b) => a - b);
       for (const x of cands) if (fits(r, x, w)) return { row: r, x };
     }
   };
@@ -262,10 +260,10 @@ function layoutMelds(board, posMap, width, tw) {
 
   const placed = new Map();
   const bumped = [];
-  const step = tw + MELD_TILE_GAP;
-  for (const m of stored) {
-    const p = posMap.get(m.id);
-    const w = meldW(m.tiles.length, tw);
+  const step = m.tw + m.tileGap;
+  for (const meld of stored) {
+    const p = posMap.get(meld.id);
+    const w = meldW(meld.tiles.length, m);
     let x = null;
     // 제자리 → 안 되면 좌우로 한두 칸 밀어서라도 근처 유지
     for (const cand of [p.x, p.x - step, p.x + step, p.x - step * 2, p.x + step * 2]) {
@@ -276,19 +274,19 @@ function layoutMelds(board, posMap, width, tw) {
     }
     if (x != null) {
       occupy(p.row, x, w);
-      placed.set(m.id, { row: p.row, x });
-    } else bumped.push(m);
+      placed.set(meld.id, { row: p.row, x });
+    } else bumped.push(meld);
   }
-  for (const m of [...bumped, ...fresh]) {
-    const w = meldW(m.tiles.length, tw);
+  for (const meld of [...bumped, ...fresh]) {
+    const w = meldW(meld.tiles.length, m);
     const spot = firstFit(w);
     occupy(spot.row, spot.x, w);
-    placed.set(m.id, spot);
+    placed.set(meld.id, spot);
   }
 
   let maxRow = -1;
   for (const { row } of placed.values()) if (row > maxRow) maxRow = row;
-  const newSpot = firstFit(meldW(3, tw)); // "+ 새 조합" 놓일 자리 (점유는 안 함)
+  const newSpot = firstFit(meldW(3, m)); // "+ 새 조합" 놓일 자리 (점유는 안 함)
   return { placed, rowCount: maxRow + 1, newSpot };
 }
 
@@ -310,6 +308,23 @@ function flyTileBack(from, to) {
   el.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
   el.style.opacity = '0.6';
   setTimeout(() => el.remove(), 380);
+}
+
+// 요소 크기에 반응하는 측정 훅 — 마운트 직후 + 크기 변화마다 compute(el) 결과를 반환
+function useMeasured(ref, compute) {
+  const [value, setValue] = useState(null);
+  const computeRef = useRef(compute);
+  computeRef.current = compute; // 최신 compute를 쓰되 옵저버는 재구성하지 않는다
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const run = () => setValue(computeRef.current(el));
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return value;
 }
 
 // 턴 카운트다운 — 0.5초 tick 리렌더를 이 작은 컴포넌트 안에 가둔다.
@@ -498,23 +513,21 @@ export default function Game({ state, me, actions, reject, nudged }) {
   const [rackPos, setRackPos] = useState(() => loadRackPos(storageKey));
   const handKey = useMemo(() => myHand.map((t) => t.id).sort().join(','), [myHand]);
 
-  // 열 수를 컨테이너 폭에 맞춘다 (가로 스크롤 대신 아랫줄로 넘김 + 세로 스크롤)
+  // 열 수를 컨테이너 폭에 맞춘다 (가로 스크롤 대신 아랫줄로 넘김 + 세로 스크롤).
+  // 간격·패딩은 .rack-grid의 계산된 스타일에서 직접 읽는다 — CSS가 유일한 원본.
   const rackScrollRef = useRef(null);
-  const [rackCols, setRackCols] = useState(14);
-  useEffect(() => {
-    const el = rackScrollRef.current;
-    if (!el) return undefined;
-    const compute = () => {
+  const rackCols =
+    useMeasured(rackScrollRef, (el) => {
       const slotW = parseFloat(getComputedStyle(el).getPropertyValue('--slot-w')) || 46;
-      const gap = window.matchMedia('(max-width: 620px)').matches ? 3 : 5;
-      const inner = el.clientWidth - 16; // rack-grid 좌우 패딩
-      setRackCols(Math.max(4, Math.floor((inner + gap) / (slotW + gap))));
-    };
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+      const grid = el.querySelector('.rack-grid');
+      const gcs = grid ? getComputedStyle(grid) : null;
+      const gap = gcs ? parseFloat(gcs.columnGap) || 0 : 5;
+      const padX = gcs
+        ? (parseFloat(gcs.paddingLeft) || 0) + (parseFloat(gcs.paddingRight) || 0)
+        : 16;
+      const inner = el.clientWidth - padX;
+      return Math.max(4, Math.floor((inner + gap) / (slotW + gap)));
+    }) ?? 14;
 
   useEffect(() => {
     setRackPos((p) => reconcilePos(p, myHand, rackCols));
@@ -542,32 +555,36 @@ export default function Game({ state, me, actions, reject, nudged }) {
   // ---- 보드 고정 배치: 폭 측정 + 멜드 자리 계산 ----
   const meldsRef = useRef(null);
   const meldPosRef = useRef(new Map()); // meldId -> {row, x} (게임 내내 유지)
-  const [boardMetrics, setBoardMetrics] = useState(null);
-  useEffect(() => {
-    const el = meldsRef.current;
-    if (!el) return undefined;
-    const compute = () => {
-      const cs = getComputedStyle(el);
-      const tw = parseFloat(cs.getPropertyValue('--btile-w')) || 36;
-      const th = parseFloat(cs.getPropertyValue('--btile-h')) || 48;
-      const meldH = th + MELD_PAD * 2 + MELD_BORDER * 2;
-      setBoardMetrics({
-        // 오른쪽 아래 뽑기 더미 자리만큼 빼고 씀
-        width: Math.max(140, el.clientWidth - 70),
-        tw,
-        meldH,
-        rowH: meldH + MELD_GAP,
-      });
+  const boardMetrics = useMeasured(meldsRef, (el) => {
+    // 레이아웃 값의 원본은 styles.css의 CSS 변수 — 여기서 읽어 layoutMelds에 전달
+    const cs = getComputedStyle(el);
+    const cssPx = (name, fallback) => {
+      const v = parseFloat(cs.getPropertyValue(name));
+      return Number.isNaN(v) ? fallback : v;
     };
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    const tw = cssPx('--btile-w', 36);
+    const th = cssPx('--btile-h', 48);
+    const pad = cssPx('--meld-pad', 6);
+    const border = cssPx('--meld-border', 2);
+    const tileGap = cssPx('--meld-tile-gap', 3);
+    const meldGap = cssPx('--meld-gap', 10);
+    const meldH = th + pad * 2 + border * 2;
+    return {
+      // 오른쪽 아래 뽑기 더미 자리만큼 빼고 씀
+      width: Math.max(140, el.clientWidth - 70),
+      tw,
+      pad,
+      border,
+      tileGap,
+      meldGap,
+      meldH,
+      rowH: meldH + meldGap,
+    };
+  });
 
   const boardLayout = useMemo(() => {
     if (!boardMetrics) return null;
-    return layoutMelds(board, meldPosRef.current, boardMetrics.width, boardMetrics.tw);
+    return layoutMelds(board, meldPosRef.current, boardMetrics);
     // board는 매 렌더 새 배열이지만 layoutMelds가 결정적이라 재계산 비용만 있고 결과는 안정적
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawBoard, boardMetrics]);
@@ -872,7 +889,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
     if (!drag || !isMyTurn || !draftBoard || !boardMetrics || !meldsRef.current) return;
     const rect = meldsRef.current.getBoundingClientRect();
     const count = drag.from === 'board' ? 1 : drag.ids.length;
-    const w = meldW(count, boardMetrics.tw);
+    const w = meldW(count, boardMetrics);
     const row = Math.max(0, Math.floor((e.clientY - rect.top) / boardMetrics.rowH));
     const x = Math.max(0, Math.min(e.clientX - rect.left - w / 2, boardMetrics.width - w));
     // 겹치면 layoutMelds의 근처 보정(±1~2칸)·첫 빈 자리 규칙이 알아서 정리
@@ -1010,7 +1027,7 @@ export default function Game({ state, me, actions, reject, nudged }) {
               style={{
                 left: boardLayout.newSpot.x,
                 top: boardLayout.newSpot.row * boardMetrics.rowH,
-                width: meldW(3, boardMetrics.tw),
+                width: meldW(3, boardMetrics),
                 height: boardMetrics.meldH,
               }}
               onDragOver={(e) => {

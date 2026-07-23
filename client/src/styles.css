@@ -711,7 +711,7 @@ button:disabled {
   padding: 40px 0 0;
 }
 /* 멜드 고정 배치: 각 멜드는 절대좌표(Game.jsx layoutMelds 계산)에 앉는다.
-   상수(패딩 6, 보더 2, 타일 간격 3, 멜드 간격 10)는 JS와 동기화 필요 */
+   레이아웃 값은 아래 변수가 유일한 원본 — Game.jsx가 getComputedStyle로 읽어간다. */
 .melds {
   position: relative;
   flex: 1;
@@ -719,15 +719,19 @@ button:disabled {
 :root {
   --btile-w: 36px;
   --btile-h: 48px;
+  --meld-pad: 6px;
+  --meld-border: 2px;
+  --meld-tile-gap: 3px;
+  --meld-gap: 10px; /* 멜드 사이 최소 간격 */
 }
 .meld {
   position: absolute;
   display: flex;
-  gap: 3px;
-  padding: 6px;
+  gap: var(--meld-tile-gap);
+  padding: var(--meld-pad);
   background: rgba(0, 0, 0, 0.18);
   border-radius: 10px;
-  border: 2px solid transparent;
+  border: var(--meld-border) solid transparent;
   animation: tile-in 0.18s ease;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
