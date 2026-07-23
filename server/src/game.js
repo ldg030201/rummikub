@@ -11,8 +11,8 @@ export const TURN_TIME_MS = 90 * 1000;
 export const TURN_TIME_OPTIONS = [0, 30000, 60000, 90000, 120000, 180000]; // 0 = 무제한
 export const SET_COUNT_OPTIONS = ['auto', 1, 2];
 
-// 개인화된 상태를 만든다 (요청한 플레이어 기준: 내 손패만 전체 공개)
-export function serializeState(room, forPlayerId) {
+// 방 공통 상태 — 수신자와 무관하게 동일한 부분 (브로드캐스트 시 1회만 생성)
+export function serializeBase(room) {
   const players = room.order.map((pid) => {
     const p = room.players.get(pid);
     return {
@@ -35,19 +35,13 @@ export function serializeState(room, forPlayerId) {
 
   if (room.game) {
     const g = room.game;
-    const isMyTurn = g.order[g.currentIndex] === forPlayerId;
     // 현재 턴 플레이어의 draft가 있으면 그걸 보여준다.
     // (관전자는 실시간 관전용, 현재 플레이어는 새로고침 후 미제출 배치 복원용)
-    const board = g.draftBoard ? g.draftBoard : g.board;
     Object.assign(base, {
-      board,
+      board: g.draftBoard ? g.draftBoard : g.board,
       poolCount: g.pool.length,
       currentPlayerId: g.order[g.currentIndex],
-      isMyTurn,
-      myHand: g.racks[forPlayerId] ?? [],
-      brokeIn: !!g.brokeIn[forPlayerId],
       winnerId: g.winnerId ?? null,
-      turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
       // 턴 마감시각 + 서버 현재시각 (클라가 시계 오차 보정해 카운트다운)
       turnDeadline: g.turnDeadline ?? null,
       serverNow: Date.now(),
@@ -55,6 +49,24 @@ export function serializeState(room, forPlayerId) {
   }
 
   return base;
+}
+
+// 수신자별 개인화 — 내 손패만 전체 공개
+export function personalizeState(room, base, forPlayerId) {
+  if (!room.game) return base;
+  const g = room.game;
+  const isMyTurn = g.order[g.currentIndex] === forPlayerId;
+  return {
+    ...base,
+    isMyTurn,
+    myHand: g.racks[forPlayerId] ?? [],
+    brokeIn: !!g.brokeIn[forPlayerId],
+    turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
+  };
+}
+
+export function serializeState(room, forPlayerId) {
+  return personalizeState(room, serializeBase(room), forPlayerId);
 }
 
 export class Room {

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 
-import { Room, serializeState } from './game.js';
+import { Room, serializeBase, personalizeState } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
@@ -29,10 +29,11 @@ function getOrCreateRoom(roomId) {
 
 const ROOM_GC_MS = 5 * 60 * 1000; // 진행 중이던 빈 방은 5분 재접속 유예 후 정리
 
-function clearRoomGC(room) {
-  if (room._gcTimer) {
-    clearTimeout(room._gcTimer);
-    room._gcTimer = null;
+// 방에 걸린 타이머 해제 (키: '_gcTimer' | '_turnSkip' | '_turnTimer')
+function clearRoomTimer(room, key) {
+  if (room[key]) {
+    clearTimeout(room[key]);
+    room[key] = null;
   }
 }
 
@@ -40,13 +41,13 @@ function clearRoomGC(room) {
 // (진행 중 방을 즉시 지우면 잠깐 전원 끊길 때 게임/재접속이 영구 소실됨)
 function cleanupIfEmpty(room) {
   if (!room.isEmpty()) {
-    clearRoomGC(room);
+    clearRoomTimer(room, '_gcTimer');
     return;
   }
-  clearTurnSkip(room);
-  clearTurnTimer(room); // 빈 방에서 타이머 회전 방지 (deadline은 유지돼 재접속 시 이어감)
+  clearRoomTimer(room, '_turnSkip');
+  clearRoomTimer(room, '_turnTimer'); // 빈 방에서 타이머 회전 방지 (deadline은 유지돼 재접속 시 이어감)
   if (room.phase === 'lobby') {
-    clearRoomGC(room);
+    clearRoomTimer(room, '_gcTimer');
     rooms.delete(room.id);
     return;
   }
@@ -60,13 +61,6 @@ function cleanupIfEmpty(room) {
 }
 
 const TURN_GRACE_MS = 45 * 1000; // 현재 턴 플레이어가 끊겨도 이 시간 안에 재접속하면 턴 유지
-
-function clearTurnSkip(room) {
-  if (room._turnSkip) {
-    clearTimeout(room._turnSkip);
-    room._turnSkip = null;
-  }
-}
 
 // 현재 턴 플레이어가 끊긴 상태면 유예 후 턴을 넘긴다 (새로고침으로 턴을 뺏기지 않게).
 // 현재 턴 플레이어가 접속돼 있으면 예약된 넘김을 취소한다.
@@ -88,28 +82,21 @@ function syncTurnSkip(room) {
       room._turnSkip.unref?.();
     }
   } else {
-    clearTurnSkip(room);
+    clearRoomTimer(room, '_turnSkip');
   }
 }
 
 // ---- 턴 제한시간 ----
 // game.turnDeadline(마감시각) 기준으로 만료 타이머를 건다. deadline이 안 바뀌었으면
 // 기존 타이머 유지(draft 갱신마다 리셋되지 않게). 만료 시 자동 한 장 뽑기 + 턴 넘김.
-function clearTurnTimer(room) {
-  if (room._turnTimer) {
-    clearTimeout(room._turnTimer);
-    room._turnTimer = null;
-  }
-}
-
 function syncTurnTimer(room) {
   const g = room.game;
   if (!g || room.phase !== 'playing' || !g.turnDeadline) {
-    clearTurnTimer(room);
+    clearRoomTimer(room, '_turnTimer');
     return;
   }
   if (room._turnTimer && room._turnTimerDeadline === g.turnDeadline) return;
-  clearTurnTimer(room);
+  clearRoomTimer(room, '_turnTimer');
   room._turnTimerDeadline = g.turnDeadline;
   room._turnTimer = setTimeout(() => {
     room._turnTimer = null;
@@ -136,12 +123,30 @@ function pushState(room) {
   syncTurnTimer(room);
 }
 
+// 접속 중인 좌석 순회 (브로드캐스트 공통 — 접속자 판정을 한 곳으로)
+function eachConnected(room, fn) {
+  for (const [pid, p] of room.players) {
+    if (p.connected && p.socket) fn(pid, p);
+  }
+}
+
+// 슬라이딩 윈도우 속도 제한: state의 `<prefix>Win/<prefix>Cnt` 필드로 windowMs당 max건 검사
+function rateLimited(state, prefix, windowMs, max) {
+  const now = Date.now();
+  const winKey = `${prefix}Win`;
+  const cntKey = `${prefix}Cnt`;
+  if (!state[winKey] || now - state[winKey] > windowMs) {
+    state[winKey] = now;
+    state[cntKey] = 0;
+  }
+  state[cntKey] += 1;
+  return state[cntKey] > max;
+}
+
 // 채팅 한 건을 방 전체에 전송
 function broadcastChat(room, entry) {
   if (!entry) return;
-  for (const [, p] of room.players) {
-    if (p.connected && p.socket) send(p.socket, { type: 'chat', ...entry });
-  }
+  eachConnected(room, (_, p) => send(p.socket, { type: 'chat', ...entry }));
 }
 
 // 시스템 메시지 (게임 시작/승리 등)
@@ -243,11 +248,9 @@ function send(ws, obj) {
 }
 
 function broadcastRoom(room) {
-  for (const [pid, p] of room.players) {
-    if (p.connected && p.socket) {
-      send(p.socket, serializeState(room, pid));
-    }
-  }
+  // 공통 부분(players·board 등)은 1회만 직렬화하고 수신자별 개인화 필드만 얹는다
+  const base = serializeBase(room);
+  eachConnected(room, (pid, p) => send(p.socket, personalizeState(room, base, pid)));
 }
 
 wss.on('connection', (ws, req) => {
@@ -290,22 +293,14 @@ wss.on('connection', (ws, req) => {
     ws.isAlive = true;
   });
 
-  // 메시지 속도 제한 상태
-  let msgCount = 0;
-  let msgWindowStart = Date.now();
+  const msgRate = {}; // 메시지 속도 제한 상태 (rateLimited가 사용)
 
   // 이 소켓의 컨텍스트
   let ctx = { roomId: null, playerId: null };
 
   ws.on('message', (raw) => {
     // 속도 제한: 윈도우당 상한 초과분은 무시 (플러딩 완화)
-    const now = Date.now();
-    if (now - msgWindowStart > MSG_WINDOW_MS) {
-      msgWindowStart = now;
-      msgCount = 0;
-    }
-    msgCount += 1;
-    if (msgCount > MSG_PER_WINDOW) return;
+    if (rateLimited(msgRate, 'msg', MSG_WINDOW_MS, MSG_PER_WINDOW)) return;
 
     let msg;
     try {
@@ -317,6 +312,10 @@ wss.on('connection', (ws, req) => {
 
     // 어떤 메시지 처리도 서버 전체를 죽이지 못하게 방어
     try {
+      // join 외 모든 메시지는 참여 중인 방이 전제 — 방 조회를 한 곳으로
+      const room = msg.type === 'join' ? null : rooms.get(ctx.roomId);
+      if (msg.type !== 'join' && !room) return;
+
       switch (msg.type) {
       case 'join': {
         const roomId = String(msg.roomId || '').trim().toUpperCase().slice(0, 12);
@@ -346,7 +345,7 @@ wss.on('connection', (ws, req) => {
         }
 
         const room = getOrCreateRoom(roomId);
-        clearRoomGC(room); // 방이 다시 활성화됨
+        clearRoomTimer(room, '_gcTimer'); // 방이 다시 활성화됨
 
         // 재접속: 토큰 우선, 없으면 이름+방코드 일치로 끊긴 좌석 복귀
         let playerId = room.reattachByToken(token, ws);
@@ -395,8 +394,6 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'settings': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const r = room.updateSettings(ctx.playerId, msg.settings);
         if (!r.ok) {
           send(ws, { type: 'error', message: r.reason });
@@ -407,8 +404,6 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'start': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const r = room.start();
         if (!r.ok) {
           send(ws, { type: 'error', message: r.reason });
@@ -420,8 +415,6 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'draw': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const r = room.draw(ctx.playerId);
         if (!r.ok) {
           send(ws, { type: 'error', message: r.reason });
@@ -432,16 +425,12 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'draft': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const r = room.updateDraft(ctx.playerId, msg.board);
         if (r.ok) pushState(room);
         break;
       }
 
       case 'commit': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const r = room.commit(ctx.playerId, msg.board);
         if (!r.ok) {
           send(ws, {
@@ -460,25 +449,16 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'chat': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         const seat = room.players.get(ctx.playerId);
         if (!seat) return;
         // 채팅 속도 제한 (3초당 8건 초과분 드롭 — 스팸 방지)
-        const now = Date.now();
-        if (!seat._cWin || now - seat._cWin > 3000) {
-          seat._cWin = now;
-          seat._cN = 0;
-        }
-        seat._cN += 1;
-        if (seat._cN > 8) return;
+        if (rateLimited(seat, '_chat', 3000, 8)) return;
         broadcastChat(room, room.addChat(seat.name, msg.text, false, ctx.playerId));
         break;
       }
 
       case 'nudge': {
-        const room = rooms.get(ctx.roomId);
-        if (!room || room.phase !== 'playing' || !room.game) return;
+        if (room.phase !== 'playing' || !room.game) return;
         const seat = room.players.get(ctx.playerId);
         if (!seat) return;
         const curId = room.currentPlayerId();
@@ -497,8 +477,6 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'newGame': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         // 진행 중인 게임을 아무나 날리지 못하게: 종료된 뒤에만 새 게임 허용
         if (room.phase === 'playing') {
           send(ws, { type: 'error', message: '게임 진행 중엔 새 게임을 시작할 수 없어.' });
@@ -510,8 +488,6 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'leave': {
-        const room = rooms.get(ctx.roomId);
-        if (!room) return;
         room.removeSocket(ctx.playerId);
         // 명시적으로 나간 경우엔 즉시 턴을 넘긴다 (데드락 방지)
         if (room.game && room.currentPlayerId() === ctx.playerId) {
