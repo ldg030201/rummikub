@@ -845,3 +845,106 @@
 :root[data-theme='excel'] .slot .tile {
   box-sizing: border-box;
 }
+
+/* ============ 입장/대기실 카드 = 시트 위 '병합 셀 범위' ============ */
+/* 떠 있는 카드 → 격자에 앉은 바깥 테두리 범위. 내부 항목은 셀 행(라벨 셀 | 값 셀). */
+:root[data-theme='excel'] .card {
+  margin: 24px auto;
+  padding: 0;
+  border: 1px solid var(--xl-grid-strong);
+  box-shadow: none;
+  background: #fff;
+}
+:root[data-theme='excel'] .card h1 {
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 17px;
+  background: var(--xl-header-bg);
+  border-bottom: 1px solid var(--xl-grid-strong);
+}
+:root[data-theme='excel'] .card > p,
+:root[data-theme='excel'] .card > .muted,
+:root[data-theme='excel'] .room-share {
+  margin: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--xl-grid);
+  font-size: 13px;
+}
+/* 폼: 라벨 = 키 셀, 입력 = 값 셀 (스프레드시트 key:value 행) */
+:root[data-theme='excel'] .join form {
+  padding: 0;
+}
+:root[data-theme='excel'] .join form label {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--xl-grid);
+  font-size: 13px;
+  color: var(--xl-header-text);
+}
+:root[data-theme='excel'] .join form label {
+  padding-left: 12px; /* 라벨 텍스트(1열) 들여쓰기 */
+}
+:root[data-theme='excel'] .join form label input {
+  border: none;
+  border-left: 1px solid var(--xl-grid);
+  border-radius: 0;
+  height: 30px;
+}
+:root[data-theme='excel'] .join .row {
+  gap: 0;
+}
+:root[data-theme='excel'] .join .row .ghost {
+  border: none;
+  border-left: 1px solid var(--xl-grid);
+}
+/* 카드 안 버튼(열기/시작) = 마지막 병합 셀 행 */
+:root[data-theme='excel'] .card .primary.big,
+:root[data-theme='excel'] .join form .primary {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid var(--xl-grid-strong);
+}
+:root[data-theme='excel'] .card .hint {
+  padding: 6px 12px;
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ============ 뽑기 더미·액션 버튼을 시트 셀로 (박스 티 제거) ============ */
+:root[data-theme='excel'] .pool-pile {
+  background: transparent;
+}
+:root[data-theme='excel'] .action-col {
+  background: transparent;
+}
+
+/* 게임 세로 레이아웃을 셀 행에 맞춤 (거터 행번호와 콘텐츠가 어긋나지 않게) */
+:root[data-theme='excel'] .game {
+  gap: 0;
+}
+:root[data-theme='excel'] .turn-banner {
+  min-height: var(--cell-h);
+  padding: 4px 8px;
+}
+:root[data-theme='excel'] .rack-header {
+  min-height: var(--cell-h);
+  margin-bottom: 0;
+  align-items: center;
+}
+:root[data-theme='excel'] .table-area {
+  padding: 0;
+}
+
+/* 상대 좌석 turn 하이라이트를 셀 강조로 (카드 글로우/펄스 제거) */
+:root[data-theme='excel'] .seat.turn {
+  box-shadow: none;
+  animation: none;
+}
+:root[data-theme='excel'] .seat-name {
+  animation: none;
+}
