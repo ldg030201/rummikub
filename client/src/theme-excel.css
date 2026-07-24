@@ -796,27 +796,33 @@
   box-sizing: border-box;
 }
 
-/* ============ 입장/대기실 카드 = 시트 위 '병합 셀 범위' ============ */
-/* 떠 있는 카드 → 격자에 앉은 바깥 테두리 범위. 내부 항목은 셀 행(라벨 셀 | 값 셀). */
+/* ============ 입장/대기실 폼 = 격자 위 셀 (카드 박스 없음) ============ */
+/* 떠 있는 카드 박스(테두리·그림자·중앙정렬) 제거 → 폼 각 행이 시트 격자 위의 흰 셀로 직접 앉는다.
+   바깥 상자가 없어 배경(격자)과 분리되지 않는다. */
 :root[data-theme='excel'] .card {
-  margin: 24px auto;
+  margin: 0;
+  max-width: 528px; /* 셀 배수 폭 (11칸) */
   padding: 0;
-  border: 1px solid var(--xl-grid-strong);
+  border: none;
   box-shadow: none;
-  background: #fff;
+  background: transparent;
 }
 :root[data-theme='excel'] .card h1 {
   margin: 0;
-  padding: 7px 12px;
-  font-size: 17px;
+  padding: 6px 12px;
+  min-height: var(--cell-h);
+  display: flex;
+  align-items: center;
+  font-size: 16px;
   background: var(--xl-header-bg);
-  border-bottom: 1px solid var(--xl-grid-strong);
+  border-bottom: 1px solid var(--xl-grid);
 }
 :root[data-theme='excel'] .card > p,
 :root[data-theme='excel'] .card > .muted,
 :root[data-theme='excel'] .room-share {
   margin: 0;
   padding: 7px 12px;
+  background: #fff; /* 흰 셀 */
   border-bottom: 1px solid var(--xl-grid);
   font-size: 13px;
 }
@@ -831,6 +837,7 @@
   gap: 0;
   margin: 0;
   padding: 0;
+  background: #fff; /* 흰 셀 */
   border-bottom: 1px solid var(--xl-grid);
   font-size: 13px;
   color: var(--xl-header-text);
@@ -862,6 +869,7 @@
 :root[data-theme='excel'] .card .hint {
   padding: 6px 12px;
   margin: 0;
+  background: #fff;
   color: var(--muted);
 }
 
