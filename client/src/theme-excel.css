@@ -657,14 +657,17 @@
 
 /* ============ 하나의 연속된 시트: 값 셀 + 배경 격자를 합침 ============ */
 /* 손패가 자기만의 흰 패널로 떠 있던 걸 없애고, 배경 시트 위의 '채워진 셀'로.
-   셀 크기를 배경 격자(--xl-cell-*)와 통일해 값 있는 칸/빈 칸이 한 시트로 이어진다. */
+   ⭐ 셀 크기의 유일한 원본은 --cell-w/--cell-h. 배경격자·손패(slot)·보드타일(btile)이
+   전부 여기서 파생돼 드리프트가 구조적으로 불가능하다. */
 :root[data-theme='excel'] {
-  --xl-cell-w: 48px; /* 전 화면 공통 셀 크기 (배경 격자 = 손패 = 보드) */
-  --xl-cell-h: 36px;
-  --slot-w: 48px;
-  --slot-h: 36px;
-  --btile-w: 48px;
-  --btile-h: 36px;
+  --cell-w: 48px; /* 전 화면 공통 셀 크기 (단일 원본) */
+  --cell-h: 36px;
+  --xl-cell-w: var(--cell-w);
+  --xl-cell-h: var(--cell-h);
+  --slot-w: var(--cell-w);
+  --slot-h: var(--cell-h);
+  --btile-w: var(--cell-w);
+  --btile-h: var(--cell-h);
 }
 
 /* 손패 영역: 흰 패널·테두리·헤더 박스 제거 → 시트에 녹아든다 */
@@ -720,13 +723,16 @@
 }
 
 /* 상대 좌석도 박스 제거 → 시트 위 '협업자 셀 범위'로 (하나의 시트 통일) */
+/* 상대 좌석 = 시트 위 '협업자 셀 범위' (흰 셀 + 테두리, 격자에 앉은 병합 범위) */
 :root[data-theme='excel'] .seat {
-  background: transparent;
-  border: none;
+  background: #fff;
+  border: 1px solid var(--xl-grid);
+  border-radius: 0;
+  padding: 3px 8px;
 }
 :root[data-theme='excel'] .seat.turn {
-  background: transparent;
-  border: none;
+  background: var(--xl-sel-fill);
+  border: 1px solid var(--xl-green);
 }
 :root[data-theme='excel'] .seat.turn .seat-name {
   color: var(--xl-green-dark);
@@ -734,9 +740,8 @@
 }
 
 /* ============ Sheet 프레임 (SheetGrid.jsx) — 진짜 스프레드시트 골격 ============ */
+/* --cell-w/--cell-h는 아래 '연속 시트' 블록에서 단일 정의 (여기선 거터/머리글만) */
 :root[data-theme='excel'] {
-  --cell-w: var(--xl-cell-w); /* 셀 크기는 배경 격자와 동일 단일 원본 */
-  --cell-h: var(--xl-cell-h);
   --gutter-w: 34px; /* 행번호 거터 폭 */
   --head-h: 22px; /* 열 머리글 행 높이 */
 }
@@ -947,4 +952,10 @@
 }
 :root[data-theme='excel'] .seat-name {
   animation: none;
+}
+
+/* 좌석 밴드를 왼쪽 정렬 (셀 열에 맞춰 시작) */
+:root[data-theme='excel'] .seats {
+  justify-content: flex-start;
+  padding-left: 0;
 }
