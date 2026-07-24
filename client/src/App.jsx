@@ -47,6 +47,35 @@ export default function App() {
   // 엑셀 모드에선 콘텐츠를 진짜 시트 프레임(열머리글·행번호·격자)으로 감싼다
   const wrapSheet = (node) => (excel ? <SheetGrid>{node}</SheetGrid> : node);
 
+  const mainContent = joined ? (
+    <>
+      {state.phase === 'lobby' && (
+        <WaitingRoom
+          state={state}
+          me={me}
+          onStart={actions.start}
+          onSettings={actions.sendSettings}
+          excel={excel}
+        />
+      )}
+      {(state.phase === 'playing' || state.phase === 'ended') && (
+        <Game state={state} me={me} actions={actions} reject={reject} nudged={nudged} excel={excel} />
+      )}
+    </>
+  ) : null;
+
+  const chatEl = joined ? (
+    <Chat
+      messages={chat}
+      onSend={actions.sendChat}
+      myId={me.playerId}
+      connected={connected}
+      onNudge={actions.nudge}
+      nudgeEnabled={state.phase === 'playing' && !state.isMyTurn}
+      excel={excel}
+    />
+  ) : null;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -98,44 +127,19 @@ export default function App() {
 
       <main className="main">
         {!joined && wrapSheet(<JoinForm onJoin={actions.join} connected={connected} excel={excel} />)}
-        {joined && (
-          <div className="layout">
-            <div className="content">
-              {wrapSheet(
-                <>
-                  {state.phase === 'lobby' && (
-                    <WaitingRoom
-                      state={state}
-                      me={me}
-                      onStart={actions.start}
-                      onSettings={actions.sendSettings}
-                      excel={excel}
-                    />
-                  )}
-                  {(state.phase === 'playing' || state.phase === 'ended') && (
-                    <Game
-                      state={state}
-                      me={me}
-                      actions={actions}
-                      reject={reject}
-                      nudged={nudged}
-                      excel={excel}
-                    />
-                  )}
-                </>
-              )}
+        {/* 엑셀 모드: 게임+채팅을 '하나의 시트'(열 머리글·행번호 한 벌 공유)에 나란히. 기본 모드: 좌우 분리. */}
+        {joined &&
+          (excel ? (
+            <SheetGrid>
+              <div className="sheet-game">{mainContent}</div>
+              {chatEl}
+            </SheetGrid>
+          ) : (
+            <div className="layout">
+              <div className="content">{mainContent}</div>
+              {chatEl}
             </div>
-            <Chat
-              messages={chat}
-              onSend={actions.sendChat}
-              myId={me.playerId}
-              connected={connected}
-              onNudge={actions.nudge}
-              nudgeEnabled={state.phase === 'playing' && !state.isMyTurn}
-              excel={excel}
-            />
-          </div>
-        )}
+          ))}
       </main>
 
       {/* 엑셀 위장 크롬: 시트 탭 + 상태바 (하단) */}

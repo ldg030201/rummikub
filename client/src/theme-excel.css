@@ -48,15 +48,17 @@
   --tile-grad: #ffffff;
 }
 
-/* 폰트: 한국어판 엑셀 기본 = 맑은 고딕. + 전면 격자선(무한 셀 느낌, 위장 Tier S) */
+/* 폰트: 한국어판 엑셀 기본 = 맑은 고딕. 격자는 body가 아니라 '하나의 시트'(.sheet-body)가
+   직접 그린다 — 그래야 게임·채팅이 배경과 분리되지 않고 한 격자 안의 셀이 된다. */
 :root[data-theme='excel'] body {
   font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Segoe UI', 'Noto Sans KR',
     sans-serif;
   color: var(--text);
   background-color: #fff;
-  background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
-  background-size: var(--xl-cell-w) var(--xl-cell-h);
+}
+/* 시트가 콘텐츠 영역을 꽉 채우게 (여백/테두리 없이 배경과 이음새 없음) */
+:root[data-theme='excel'] .main {
+  padding: 0;
 }
 
 /* 상단바 → 엑셀 제목 표시줄 (흰 배경 + 얇은 경계) */
@@ -494,141 +496,76 @@
   border: 1px solid var(--xl-green-dark);
 }
 
-/* ============ 채팅 = 카카오톡-엑셀 위장 시트 (Chat.jsx 엑셀 경로) ============ */
-/* 단일 CSS Grid에 격자를 직접 그린다(gap-as-gridline): 컨테이너 배경=선색, gap 1px,
-   셀=흰 배경 → 균일한 1px 격자. 메시지는 셀/병합셀, 입력은 fx 수식줄, 전송은 셀 버튼. */
+/* ============ 채팅 = '하나의 시트'의 오른쪽 열 (프레임 없음) ============ */
+/* 자기 열머리글·행번호·테두리 없이, 시트 오른쪽 열에 메시지 셀만. 좌측 1px 격자선으로 열 구분. */
 :root[data-theme='excel'] .chat-xl {
-  background: #fff;
-  border: 1px solid var(--xl-grid);
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-left: 1px solid var(--xl-grid);
   border-radius: 0;
   box-shadow: none;
-  overflow: hidden;
+  background: transparent;
 }
 .chatx {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  display: grid;
-  grid-template-columns: 26px repeat(5, 1fr);
-  grid-auto-rows: minmax(22px, auto);
-  gap: 1px;
-  background: var(--xl-grid); /* gap이 격자선으로 보인다 */
+  display: flex;
+  flex-direction: column;
   font-size: 12px;
-  align-content: start;
 }
-.chatx > * {
-  background: #fff;
-  min-width: 0;
-}
-/* 열 머리글 (고정) */
-.chatx-colh {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--xl-header-bg);
-  color: var(--xl-header-text);
+/* 메시지 = 한 행(셀). 최소 셀 높이, 길면 자라며 격자선(아래) 유지 */
+.chatx-line {
+  min-height: var(--cell-h);
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-/* 행번호 거터 (고정) */
-.chatx-gutter {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--xl-header-bg);
-  color: var(--xl-header-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-variant-numeric: tabular-nums;
-}
-/* 좌상단 코너 (전체선택 삼각형) */
-.chatx-corner {
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 3;
-  background: var(--xl-header-bg);
-}
-.chatx-corner::after {
-  content: '';
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 0;
-  height: 0;
-  border: 4px solid transparent;
-  border-right-color: #b0b3b8;
-  border-bottom-color: #b0b3b8;
-}
-/* 셀 공통 */
-.chatx-cell {
-  padding: 2px 6px;
-  display: flex;
-  align-items: center;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--xl-grid);
   color: #202124;
-  overflow: hidden;
   word-break: break-word;
-  white-space: normal;
-}
-.chatx-fill {
-  background: #fff;
 }
 /* 상대 발신자 헤더 셀 */
-.chatx-name {
+.chatx-line.name {
   font-weight: 700;
   background: var(--xl-header-bg);
-  color: #202124;
 }
-/* 내 메시지 = '선택된 셀' (연파랑 채움 + 파란 테두리) */
-.chatx-msg.mine {
+/* 상대 메시지 = 왼쪽 흰 셀 */
+.chatx-line.msg {
+  background: #fff;
+}
+/* 내 메시지 = '선택된 셀' (연파랑 채움 + 파란 테두리, 우측 정렬) */
+.chatx-line.msg.mine {
   background: #e8f0fe;
   box-shadow: inset 0 0 0 1px #1a73e8;
   justify-content: flex-end;
   text-align: right;
 }
 /* 시간 = 옅은 회색 작은 셀 */
-.chatx-time {
+.chatx-line.time {
   color: #9aa0a6;
   font-size: 11px;
+  min-height: 20px;
 }
-.chatx-time.mine {
+.chatx-line.time.mine {
   justify-content: flex-end;
 }
-/* 시스템 = 가로 병합 회색 셀 (구분행) */
-.chatx-sys {
+/* 시스템 = 회색 구분 셀 */
+.chatx-line.sys {
   justify-content: center;
   color: var(--muted);
   background: #f1f3f4;
   font-size: 11px;
 }
 
-/* 입력 = 수식 입력줄(fx). 전송 = 셀 버튼 */
-.chatx-fx {
+/* 입력·전송 = 하단 셀 행 */
+.chatx-composer {
   display: flex;
   align-items: stretch;
-  height: 28px;
+  height: var(--cell-h);
   border-top: 1px solid var(--xl-grid-strong);
   background: #fff;
-}
-.chatx-namebox {
-  width: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid var(--xl-grid);
-  color: #333;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.chatx-fxicon {
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  font-style: italic;
-  color: #999;
-  border-right: 1px solid var(--xl-grid);
 }
 .chatx-input {
   flex: 1;
@@ -745,7 +682,7 @@
   --gutter-w: 34px; /* 행번호 거터 폭 */
   --head-h: 22px; /* 열 머리글 행 높이 */
 }
-/* 게임 콘텐츠 열을 감싸는 시트: 열머리글행 + (거터열 | 셀영역) */
+/* 게임+채팅을 함께 감싸는 '하나의 시트': 열머리글행 + (거터열 | 셀영역). 테두리 없음(배경과 이음새 없음) */
 .sheet {
   flex: 1;
   min-height: 0;
@@ -754,7 +691,6 @@
   grid-template-columns: var(--gutter-w) 1fr;
   grid-template-rows: var(--head-h) 1fr;
   background: #fff;
-  border: 1px solid var(--xl-grid-strong);
 }
 .sheet-corner {
   grid-row: 1;
@@ -820,11 +756,20 @@
     linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
   background-size: var(--cell-w) var(--cell-h);
   background-position: 0 0;
+  /* 셀영역 = 게임(왼쪽) + 채팅(오른쪽)이 나란히 한 격자 위에 (열머리글·거터 한 벌 공유) */
+  display: flex;
+  align-items: stretch;
 }
-/* 시트 안에서는 게임 콘텐츠 컨테이너들이 투명 — 셀 영역 격자가 그대로 비친다 */
+.sheet-game {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+/* 시트 안에서는 모든 컨테이너가 투명 — 셀 영역 격자가 그대로 비친다 */
 :root[data-theme='excel'] .sheet-body .game,
 :root[data-theme='excel'] .sheet-body .table-area,
-:root[data-theme='excel'] .sheet-body .rack-area {
+:root[data-theme='excel'] .sheet-body .rack-area,
+:root[data-theme='excel'] .sheet-body .chat-xl {
   background: transparent;
 }
 /* .content가 시트 하나를 세로로 꽉 채우게 */

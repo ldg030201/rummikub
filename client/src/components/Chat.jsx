@@ -18,8 +18,6 @@ function fmtTime(ts) {
   return `${ap} ${h}:${m}`;
 }
 
-const CHAT_COLS = 5; // 채팅 시트 데이터 열 수 (A~E)
-
 // 메시지 배열 → 스프레드시트 행 목록으로 번역 (표현 계층).
 // 상대=왼쪽 열, 나=오른쪽 열(선택 셀 하이라이트), 발신자=헤더 셀, 시간=그룹 끝 회색 셀,
 // 시스템=가로 병합 회색 셀. 긴 메시지는 셀이 세로로 자라며(wrap&grow) 격자는 유지.
@@ -86,106 +84,46 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
     }
   };
 
-  // ---- 엑셀 모드: 카카오톡-엑셀 위장 시트 ----
+  // ---- 엑셀 모드: 프레임 없이 '하나의 시트'의 오른쪽 열 셀로만 렌더 ----
+  // (자기 열머리글·행번호·테두리 없음 — SheetGrid의 공용 머리글/거터를 쓴다)
   if (excel) {
     const rows = toSheetRows(messages, myId);
-    const nameBox = `E${rows.length + 2}`; // fx 이름상자에 표시할 그럴듯한 셀 좌표
     return (
       <aside className="chat chat-xl">
         <div className="chatx" ref={listRef} onScroll={onScroll}>
-          {/* 열 머리글 + 좌상단 코너 (고정) */}
-          <div className="chatx-corner" />
-          {Array.from({ length: CHAT_COLS }, (_, c) => (
-            <div key={`h${c}`} className="chatx-colh">
-              {String.fromCharCode(65 + c)}
-            </div>
-          ))}
-          {/* 데이터 행: 행마다 거터(행번호) + 5칸을 채우는 셀들 */}
           {rows.map((r, i) => {
-            const rn = i + 1;
-            const gutter = (
-              <div key={`g${i}`} className="chatx-gutter">
-                {rn}
+            if (r.kind === 'system')
+              return (
+                <div key={i} className="chatx-line sys">
+                  {r.text}
+                </div>
+              );
+            if (r.kind === 'header')
+              return (
+                <div key={i} className="chatx-line name">
+                  {r.name}:
+                </div>
+              );
+            if (r.kind === 'time')
+              return (
+                <div key={i} className={`chatx-line time ${r.mine ? 'mine' : ''}`}>
+                  {fmtTime(r.ts)}
+                </div>
+              );
+            return (
+              <div key={i} className={`chatx-line msg ${r.mine ? 'mine' : ''}`}>
+                {r.text}
               </div>
             );
-            const fill = (key, span) => (
-              <div key={key} className="chatx-fill" style={{ gridColumn: `span ${span}` }} />
-            );
-            if (r.kind === 'system') {
-              return [
-                gutter,
-                <div key={`c${i}`} className="chatx-cell chatx-sys" style={{ gridColumn: 'span 5' }}>
-                  {r.text}
-                </div>,
-              ];
-            }
-            if (r.kind === 'header') {
-              return [
-                gutter,
-                <div key={`c${i}`} className="chatx-cell chatx-name" style={{ gridColumn: 'span 3' }}>
-                  {r.name}:
-                </div>,
-                fill(`f${i}`, 2),
-              ];
-            }
-            if (r.kind === 'time') {
-              return r.mine
-                ? [
-                    gutter,
-                    fill(`f${i}`, 2),
-                    <div
-                      key={`c${i}`}
-                      className="chatx-cell chatx-time mine"
-                      style={{ gridColumn: 'span 3' }}
-                    >
-                      {fmtTime(r.ts)}
-                    </div>,
-                  ]
-                : [
-                    gutter,
-                    <div key={`c${i}`} className="chatx-cell chatx-time" style={{ gridColumn: 'span 3' }}>
-                      {fmtTime(r.ts)}
-                    </div>,
-                    fill(`f${i}`, 2),
-                  ];
-            }
-            // 일반 메시지
-            return r.mine
-              ? [
-                  gutter,
-                  fill(`f${i}`, 2),
-                  <div key={`c${i}`} className="chatx-cell chatx-msg mine" style={{ gridColumn: 'span 3' }}>
-                    {r.text}
-                  </div>,
-                ]
-              : [
-                  gutter,
-                  <div key={`c${i}`} className="chatx-cell chatx-msg" style={{ gridColumn: 'span 3' }}>
-                    {r.text}
-                  </div>,
-                  fill(`f${i}`, 2),
-                ];
-          })}
-          {/* 아래 빈 셀 행들(진짜 시트처럼) */}
-          {Array.from({ length: Math.max(0, 18 - rows.length) }, (_, k) => {
-            const rn = rows.length + k + 1;
-            return [
-              <div key={`eg${k}`} className="chatx-gutter">
-                {rn}
-              </div>,
-              <div key={`ef${k}`} className="chatx-fill" style={{ gridColumn: 'span 5' }} />,
-            ];
           })}
         </div>
-        {/* 입력 = 수식 입력줄(fx), 전송 = 셀 버튼 */}
-        <form className="chatx-fx" onSubmit={submit}>
-          <span className="chatx-namebox">{nameBox}</span>
-          <span className="chatx-fxicon">fx</span>
+        {/* 입력·전송 = 하단 셀 행 */}
+        <form className="chatx-composer" onSubmit={submit}>
           <input
             className="chatx-input"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={connected ? '' : '연결 중...'}
+            placeholder={connected ? '메모…' : '연결 중…'}
             maxLength={200}
             disabled={!connected}
           />
