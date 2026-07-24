@@ -334,8 +334,10 @@ function useMeasured(ref, compute) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const ro = new ResizeObserver(() => setValue(computeRef.current(el)));
-    ro.observe(el); // observe 직후 현재 크기로 초기 콜백이 한 번 발생 (스펙)
+    const run = () => setValue(computeRef.current(el));
+    run(); // 즉시 1회 측정 (옵저버 초기 콜백이 늦거나 안 오는 컨텍스트 대비)
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);
   return value;
