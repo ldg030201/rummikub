@@ -12,6 +12,7 @@ import {
   ExcelSheetTabs,
   ExcelStatusBar,
 } from './components/ExcelFrame.jsx';
+import { SheetGrid } from './components/SheetGrid.jsx';
 
 // 선택 가능한 테마 (value, 라벨). 'excel' = 회사에서 몰래 하는 엑셀 위장 모드.
 const THEMES = [
@@ -43,6 +44,8 @@ export default function App() {
   // 상태바에 흘릴 게임값 (엑셀 모드 위장): 손패 수 = 개수, 내 턴 = '입력'
   const handCount = state && typeof state === 'object' ? state.myHand?.length : undefined;
   const statusMode = state?.isMyTurn ? '입력' : '준비';
+  // 엑셀 모드에선 콘텐츠를 진짜 시트 프레임(열머리글·행번호·격자)으로 감싼다
+  const wrapSheet = (node) => (excel ? <SheetGrid>{node}</SheetGrid> : node);
 
   return (
     <div className="app">
@@ -94,20 +97,32 @@ export default function App() {
       {excel && <ExcelFormulaBar cell={joined ? 'A1' : ''} value="=SUM(B2:B15)" />}
 
       <main className="main">
-        {!joined && <JoinForm onJoin={actions.join} connected={connected} />}
+        {!joined && wrapSheet(<JoinForm onJoin={actions.join} connected={connected} excel={excel} />)}
         {joined && (
           <div className="layout">
             <div className="content">
-              {state.phase === 'lobby' && (
-                <WaitingRoom
-                  state={state}
-                  me={me}
-                  onStart={actions.start}
-                  onSettings={actions.sendSettings}
-                />
-              )}
-              {(state.phase === 'playing' || state.phase === 'ended') && (
-                <Game state={state} me={me} actions={actions} reject={reject} nudged={nudged} />
+              {wrapSheet(
+                <>
+                  {state.phase === 'lobby' && (
+                    <WaitingRoom
+                      state={state}
+                      me={me}
+                      onStart={actions.start}
+                      onSettings={actions.sendSettings}
+                      excel={excel}
+                    />
+                  )}
+                  {(state.phase === 'playing' || state.phase === 'ended') && (
+                    <Game
+                      state={state}
+                      me={me}
+                      actions={actions}
+                      reject={reject}
+                      nudged={nudged}
+                      excel={excel}
+                    />
+                  )}
+                </>
               )}
             </div>
             <Chat
@@ -117,6 +132,7 @@ export default function App() {
               connected={connected}
               onNudge={actions.nudge}
               nudgeEnabled={state.phase === 'playing' && !state.isMyTurn}
+              excel={excel}
             />
           </div>
         )}

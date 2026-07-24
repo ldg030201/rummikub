@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Tile from './Tile.jsx';
 import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
 import { ls, ss } from '../storage.js';
+import { useSheet } from './SheetGrid.jsx';
 
 // 유틸
 const clone = (v) =>
@@ -341,9 +342,9 @@ function useMeasured(ref, compute) {
 }
 
 // 배경 시트 격자에 스냅 (엑셀 모드 전용).
-// 배경 격자(body, --xl-cell-*)가 유일한 기준이고, 셀 컨테이너를 그 격자 경계로 이동시킨다.
-// anchor의 문서상 위치를 셀 크기로 나눈 나머지만큼(반 칸 이내로) 보정 → 값 셀이 배경 셀에 포개짐.
-function useGridSnap(anchorRef, enabled) {
+// 셀 컨테이너(anchor)를 격자 원점(originRef=시트 셀 영역)의 격자 경계로 이동시킨다.
+// anchor의 origin 상대 위치를 셀 크기로 나눈 나머지만큼(반 칸 이내로) 보정 → 값 셀이 배경 셀에 포개짐.
+function useGridSnap(anchorRef, enabled, originRef) {
   const [snap, setSnap] = useState(null);
   useEffect(() => {
     if (!enabled) {
@@ -354,26 +355,27 @@ function useGridSnap(anchorRef, enabled) {
     if (!el) return undefined;
     const compute = () => {
       const rs = getComputedStyle(document.documentElement);
-      const w = parseFloat(rs.getPropertyValue('--xl-cell-w'));
-      const h = parseFloat(rs.getPropertyValue('--xl-cell-h'));
+      const w = parseFloat(rs.getPropertyValue('--cell-w')) || parseFloat(rs.getPropertyValue('--xl-cell-w'));
+      const h = parseFloat(rs.getPropertyValue('--cell-h')) || parseFloat(rs.getPropertyValue('--xl-cell-h'));
       if (!w || !h) return;
       const r = el.getBoundingClientRect();
+      const o = originRef?.current?.getBoundingClientRect();
+      const baseX = o ? o.left : 0;
+      const baseY = o ? o.top : 0;
       // 가장 가까운 격자선으로 (이동량은 반 칸 이내)
       const off = (v, size) => {
         const m = ((v % size) + size) % size;
         return m <= size / 2 ? -m : size - m;
       };
-      setSnap({
-        x: off(r.left + window.scrollX, w),
-        y: off(r.top + window.scrollY, h),
-      });
+      setSnap({ x: off(r.left - baseX, w), y: off(r.top - baseY, h) });
     };
     compute();
     const ro = new ResizeObserver(compute);
     ro.observe(document.body);
     ro.observe(el);
+    if (originRef?.current) ro.observe(originRef.current);
     return () => ro.disconnect();
-  }, [anchorRef, enabled]);
+  }, [anchorRef, enabled, originRef]);
   return snap;
 }
 
@@ -395,6 +397,7 @@ function TurnTimer({ deadline }) {
 
 export default function Game({ state, me, actions, reject, nudged, excel }) {
   const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
+  const sheet = useSheet(); // 엑셀 시트 프레임(열 수·셀 크기·셀 영역 ref)
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
@@ -580,8 +583,8 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       return Math.max(4, Math.floor((inner + gap) / (slotW + gap)));
     }) ?? 14;
 
-  // 엑셀 모드: 손패 셀을 배경 시트 격자에 스냅
-  const rackSnap = useGridSnap(rackScrollRef, excel);
+  // 엑셀 모드: 손패 셀을 시트 셀 영역(sheet-body) 격자에 스냅
+  const rackSnap = useGridSnap(rackScrollRef, excel, sheet.bodyRef);
 
   useEffect(() => {
     setRackPos((p) => reflowIfAutoPacked(reconcilePos(p, myHand, rackCols), rackCols));
