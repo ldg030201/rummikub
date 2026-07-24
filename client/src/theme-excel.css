@@ -589,13 +589,22 @@
   color: var(--xl-header-text);
   padding: 0 2px 4px;
 }
+/* 손패 그리드가 '자기 셀에 딱 맞는 격자'를 스스로 그린다 (background-position 0 0 =
+   CSS grid 셀 원점과 동일). → 값 셀과 빈 셀이 같은 격자선에 정확히 정렬돼 하나의 표가 된다.
+   (뒤 body 격자에 얹으면 원점이 어긋나 따로 논다 — 그래서 여기서 직접 그림) */
 :root[data-theme='excel'] .rack-grid {
-  background: transparent;
-  border: none;
+  background-color: #fff;
+  background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
+  background-size: var(--slot-w) var(--slot-h);
+  background-position: 0 0;
+  border: 1px solid var(--xl-grid);
+  border-width: 1px 0 0 1px; /* 위·왼쪽 마감선 (오른/아래는 셀 격자가 담당) */
   padding: 0;
   gap: 0;
 }
-/* 빈 슬롯 = 배경 격자가 그대로 비침(투명). 값 있는 셀만 흰 셀로 채운다 */
+/* 빈 슬롯 = rack-grid 자기 격자가 그대로 비침(투명). 값 있는 셀만 흰 셀로 덮되
+   테두리를 격자선 위치에 그려 배경 격자와 정확히 포개진다. */
 :root[data-theme='excel'] .slot {
   background: transparent;
   border: none;
@@ -605,8 +614,8 @@
   width: 100%;
   height: 100%;
   background: #fff;
-  border: 1px solid var(--xl-grid);
-  box-shadow: none;
+  border: none;
+  box-shadow: inset -1px -1px 0 var(--xl-grid); /* 오른·아래 격자선 = 배경 격자와 동일 위치 */
 }
 :root[data-theme='excel'] .slot .tile[draggable='true']:hover {
   box-shadow: inset 0 0 0 2px var(--xl-sel);
@@ -624,6 +633,20 @@
 :root[data-theme='excel'] .turn-banner.mine {
   background: transparent;
   border: none;
+  color: var(--xl-green-dark);
+  font-weight: 700;
+}
+
+/* 상대 좌석도 박스 제거 → 시트 위 '협업자 셀 범위'로 (하나의 시트 통일) */
+:root[data-theme='excel'] .seat {
+  background: transparent;
+  border: none;
+}
+:root[data-theme='excel'] .seat.turn {
+  background: transparent;
+  border: none;
+}
+:root[data-theme='excel'] .seat.turn .seat-name {
   color: var(--xl-green-dark);
   font-weight: 700;
 }
