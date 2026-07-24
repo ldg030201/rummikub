@@ -760,24 +760,36 @@
   border-bottom: 1px solid var(--xl-grid);
 }
 /* 셀 영역 — 여기 원점(0,0)에 배경 격자를 직접 그린다. 자식(게임 콘텐츠)이 이 격자에 정렬됨. */
+/* 셀 영역 = 진짜 CSS 그리드(트랙 = 셀 크기). 배경 이미지 격자선은 빈 셀용.
+   모든 콘텐츠(폼/게임/채팅)가 이 그리드의 셀에 grid-column/row로 직접 들어간다. */
 .sheet-body {
   grid-row: 2;
   grid-column: 2;
-  position: relative;
   min-height: 100%;
   background-color: #fff;
   background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
   background-size: var(--cell-w) var(--cell-h);
   background-position: 0 0;
-  /* 셀영역 = 게임(왼쪽) + 채팅(오른쪽)이 나란히 한 격자 위에 (열머리글·거터 한 벌 공유) */
-  display: flex;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 14), var(--cell-w));
+  grid-template-rows: repeat(var(--rows, 20), var(--cell-h));
+  align-content: start;
 }
+/* 게임 = 왼쪽 열 범위, 채팅 = 오른쪽 6열 — 각각 시트 그리드의 셀 범위(아이템) */
 .sheet-game {
-  flex: 1;
-  min-width: 0;
+  grid-column: 1 / -7;
+  grid-row: 1 / -1;
   position: relative;
+  min-width: 0;
+}
+:root[data-theme='excel'] .sheet-body .chat-xl {
+  grid-column: -7 / -1;
+  grid-row: 1 / -1;
+}
+/* 입장/대기실 폼: display:contents로 자식 셀이 sheet-body 그리드의 셀이 된다 */
+:root[data-theme='excel'] .xl-form {
+  display: contents;
 }
 /* 시트 안에서는 모든 컨테이너가 투명 — 셀 영역 격자가 그대로 비친다 */
 :root[data-theme='excel'] .sheet-body .game,
@@ -932,4 +944,72 @@
 :root[data-theme='excel'] .seats {
   justify-content: flex-start;
   padding-left: 0;
+}
+
+/* ============ 입장 폼 셀 스타일 (배치는 sheet-body 그리드, display:contents) ============ */
+/* .xl-form은 display:contents(위 sheet-body 섹션)라 아래 .xf-* 셀이 곧 시트 셀. */
+:root[data-theme='excel'] .xf-cell {
+  box-sizing: border-box;
+  background: #fff;
+  border-right: 1px solid var(--xl-grid);
+  border-bottom: 1px solid var(--xl-grid);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+}
+:root[data-theme='excel'] .xf-title {
+  font-weight: 700;
+  font-size: 15px;
+  background: var(--xl-header-bg);
+}
+:root[data-theme='excel'] .xf-desc {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: normal;
+  line-height: 1.25;
+}
+:root[data-theme='excel'] .xf-label {
+  color: var(--xl-header-text);
+}
+:root[data-theme='excel'] .xf-value {
+  padding: 0;
+}
+:root[data-theme='excel'] .xf-value input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0 8px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+:root[data-theme='excel'] .xf-value input:focus {
+  box-shadow: inset 0 0 0 2px var(--xl-sel);
+}
+:root[data-theme='excel'] .xf-btn {
+  justify-content: center;
+  cursor: pointer;
+  background: var(--xl-header-bg);
+  border-radius: 0;
+  border-top: none;
+  border-left: none;
+  font-weight: 600;
+  color: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .xf-submit {
+  justify-content: center;
+  background: var(--xl-green);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 0;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  font-size: 14px;
 }

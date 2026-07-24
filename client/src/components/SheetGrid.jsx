@@ -97,9 +97,9 @@ export function SheetGrid({ children }) {
           </span>
         ))}
       </div>
-      <div className="sheet-body" ref={bodyRef}>
+      <div className="sheet-body" ref={bodyRef} style={{ '--cols': cols, '--rows': rows }}>
         <SheetContext.Provider
-          value={{ cols, cellW: m?.cellW ?? 48, cellH: m?.cellH ?? 36, bodyRef }}
+          value={{ cols, rows, cellW: m?.cellW ?? 48, cellH: m?.cellH ?? 36, bodyRef }}
         >
           {children}
         </SheetContext.Provider>
