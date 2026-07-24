@@ -91,6 +91,29 @@ function reconcilePos(pos, hand, cols) {
   return next;
 }
 
+// 손패가 '자동 배치된 블록'(사용자가 손대지 않아 top-left에 빈틈 없이 채워진 상태)이고
+// 현재 열 수보다 좁게 뭉쳐 있으면, 넓은 열 수에 맞춰 다시 편다.
+// (초기 렌더에서 열 수가 좁게 측정돼 소수 열로 박제되는 문제 자가 치유. 사용자가 빈칸을
+//  두고 배치한 경우엔 '연속 아님'으로 판정돼 그대로 보존된다.)
+function reflowIfAutoPacked(pos, cols) {
+  const ids = Object.keys(pos);
+  if (!ids.length) return pos;
+  let maxC = 0;
+  for (const id of ids) if (pos[id].c > maxC) maxC = pos[id].c;
+  const packCols = maxC + 1;
+  if (packCols >= cols) return pos; // 이미 현재 폭을 다 씀 → 그대로
+  // packCols 기준 선형 인덱스가 0..n-1로 빈틈 없이 연속인지(=자동 배치인지) 확인
+  const idxs = ids.map((id) => pos[id].r * packCols + pos[id].c).sort((a, b) => a - b);
+  for (let i = 0; i < idxs.length; i += 1) if (idxs[i] !== i) return pos; // 빈칸 있음(사용자 배치) → 보존
+  // 읽기 순서(행→열) 유지하며 넓은 cols로 재배치
+  const ordered = ids.slice().sort((a, b) => pos[a].r - pos[b].r || pos[a].c - pos[b].c);
+  const next = {};
+  ordered.forEach((id, k) => {
+    next[id] = posOf(k, cols);
+  });
+  return next;
+}
+
 // 단일 타일을 슬롯에 놓기. 자리에 타일이 있으면 뒤로 한 칸씩 민다 (줄 끝이면 다음 줄로).
 function placeAt(pos, tileId, r, c, cols) {
   const occupied = new Map();
@@ -300,7 +323,9 @@ function flyTileBack(from, to) {
   setTimeout(() => el.remove(), 380);
 }
 
-// 요소 크기에 반응하는 측정 훅 — 마운트 직후 + 크기 변화마다 compute(el) 결과를 반환
+// 요소 크기에 반응하는 측정 훅 — 크기 변화마다 compute(el) 결과를 반환.
+// 첫 값도 ResizeObserver 콜백(레이아웃 확정 후)에서 받는다. 동기 측정은 flex 폭이
+// 확정되기 전에 실행돼 잘못된 값(예: 손패 열 수가 좁게)을 잡는 경우가 있어 쓰지 않는다.
 function useMeasured(ref, compute) {
   const [value, setValue] = useState(null);
   const computeRef = useRef(compute);
@@ -308,10 +333,8 @@ function useMeasured(ref, compute) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const run = () => setValue(computeRef.current(el));
-    run();
-    const ro = new ResizeObserver(run);
-    ro.observe(el);
+    const ro = new ResizeObserver(() => setValue(computeRef.current(el)));
+    ro.observe(el); // observe 직후 현재 크기로 초기 콜백이 한 번 발생 (스펙)
     return () => ro.disconnect();
   }, [ref]);
   return value;
@@ -521,7 +544,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     }) ?? 14;
 
   useEffect(() => {
-    setRackPos((p) => reconcilePos(p, myHand, rackCols));
+    setRackPos((p) => reflowIfAutoPacked(reconcilePos(p, myHand, rackCols), rackCols));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handKey, rackCols]);
 
