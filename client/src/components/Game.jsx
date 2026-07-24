@@ -340,6 +340,43 @@ function useMeasured(ref, compute) {
   return value;
 }
 
+// 배경 시트 격자에 스냅 (엑셀 모드 전용).
+// 배경 격자(body, --xl-cell-*)가 유일한 기준이고, 셀 컨테이너를 그 격자 경계로 이동시킨다.
+// anchor의 문서상 위치를 셀 크기로 나눈 나머지만큼(반 칸 이내로) 보정 → 값 셀이 배경 셀에 포개짐.
+function useGridSnap(anchorRef, enabled) {
+  const [snap, setSnap] = useState(null);
+  useEffect(() => {
+    if (!enabled) {
+      setSnap(null);
+      return undefined;
+    }
+    const el = anchorRef.current;
+    if (!el) return undefined;
+    const compute = () => {
+      const rs = getComputedStyle(document.documentElement);
+      const w = parseFloat(rs.getPropertyValue('--xl-cell-w'));
+      const h = parseFloat(rs.getPropertyValue('--xl-cell-h'));
+      if (!w || !h) return;
+      const r = el.getBoundingClientRect();
+      // 가장 가까운 격자선으로 (이동량은 반 칸 이내)
+      const off = (v, size) => {
+        const m = ((v % size) + size) % size;
+        return m <= size / 2 ? -m : size - m;
+      };
+      setSnap({
+        x: off(r.left + window.scrollX, w),
+        y: off(r.top + window.scrollY, h),
+      });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(document.body);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [anchorRef, enabled]);
+  return snap;
+}
+
 // 턴 카운트다운 — 0.5초 tick 리렌더를 이 작은 컴포넌트 안에 가둔다.
 // (Game 본체에 두면 tick마다 전체 리렌더 + FLIP 위치 측정이 같이 돌아 낭비)
 function TurnTimer({ deadline }) {
@@ -542,6 +579,9 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       const inner = el.clientWidth - padX;
       return Math.max(4, Math.floor((inner + gap) / (slotW + gap)));
     }) ?? 14;
+
+  // 엑셀 모드: 손패 셀을 배경 시트 격자에 스냅
+  const rackSnap = useGridSnap(rackScrollRef, excel);
 
   useEffect(() => {
     setRackPos((p) => reflowIfAutoPacked(reconcilePos(p, myHand, rackCols), rackCols));
@@ -1146,6 +1186,8 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
             style={{
               gridTemplateColumns: `repeat(${rackCols}, var(--slot-w))`,
               gridTemplateRows: `repeat(${rackRows}, var(--slot-h))`,
+              // 엑셀 모드: 배경 시트 격자 경계에 셀을 맞춘다
+              ...(rackSnap ? { transform: `translate(${rackSnap.x}px, ${rackSnap.y}px)` } : null),
             }}
             onDragOver={(e) => {
               if (canDropOnRack()) e.preventDefault(); // 데드존에서도 드롭 허용(그리드가 위임)
