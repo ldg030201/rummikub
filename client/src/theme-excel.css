@@ -838,3 +838,10 @@
 :root[data-theme='excel'] .content {
   min-height: 0;
 }
+
+/* 보드 멜드/타일을 셀 배수로 정확히 (테두리가 폭을 늘리지 않게) → 배경 셀에 포개짐 */
+:root[data-theme='excel'] .meld,
+:root[data-theme='excel'] .meld .tile,
+:root[data-theme='excel'] .slot .tile {
+  box-sizing: border-box;
+}

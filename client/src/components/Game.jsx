@@ -613,7 +613,24 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const meldsRef = useRef(null);
   const meldPosRef = useRef(new Map()); // meldId -> {row, x} (게임 내내 유지)
   const boardMetrics = useMeasured(meldsRef, (el) => {
-    // 레이아웃 값의 원본은 styles.css의 CSS 변수 — 여기서 읽어 layoutMelds에 전달
+    // 엑셀 모드: 멜드를 시트 셀 격자에 앉힌다 — 타일=1셀, 멜드 간격=1셀, 행 피치=2셀.
+    // 그러면 layoutMelds가 셀 배수 좌표를 내고, 멜드가 배경 셀 위에 '범위 선택'처럼 포개진다.
+    if (excel) {
+      const cw = sheet.cellW || 48;
+      const ch = sheet.cellH || 36;
+      const usableCols = Math.max(3, Math.floor(el.clientWidth / cw) - 2); // 우측 2열은 뽑기 더미
+      return {
+        width: usableCols * cw,
+        tw: cw,
+        pad: 0,
+        border: 1,
+        tileGap: 0,
+        meldGap: cw, // 멜드 사이 1셀
+        meldH: ch,
+        rowH: ch * 2, // 멜드 한 줄 = 2셀(값 셀 + 빈 셀)
+      };
+    }
+    // 기본 테마: styles.css의 CSS 변수 그대로
     const cs = getComputedStyle(el);
     const cssPx = (name, fallback) => {
       const v = parseFloat(cs.getPropertyValue(name));
@@ -638,6 +655,9 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       rowH: meldH + meldGap,
     };
   });
+
+  // 엑셀 모드: 보드(멜드 영역)도 시트 격자에 스냅
+  const meldsSnap = useGridSnap(meldsRef, excel, sheet.bodyRef);
 
   const boardLayout = useMemo(() => {
     if (!boardMetrics) return null;
@@ -1036,11 +1056,12 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         <div
           className="melds"
           ref={meldsRef}
-          style={
-            boardLayout && boardMetrics
+          style={{
+            ...(boardLayout && boardMetrics
               ? { minHeight: Math.max(1, boardLayout.rowCount + 1) * boardMetrics.rowH }
-              : undefined
-          }
+              : null),
+            ...(meldsSnap ? { transform: `translate(${meldsSnap.x}px, ${meldsSnap.y}px)` } : null),
+          }}
           onDragOver={isMyTurn ? (e) => e.preventDefault() : undefined}
           onDrop={isMyTurn ? dropOnFelt : undefined}
         >
