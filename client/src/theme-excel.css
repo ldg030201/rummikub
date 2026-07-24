@@ -452,16 +452,21 @@
   color: var(--text);
 }
 
-/* 대기실 참가자 목록 → 셀 행 (인접 행 격자선 합치기) */
+/* 대기실 참가자 목록 → 셀 행 (테두리 박스 아니라 행 구분선만) */
+:root[data-theme='excel'] .player-list {
+  margin: 0;
+}
 :root[data-theme='excel'] .player-list li {
   background: #fff;
-  border: 1px solid var(--xl-grid);
-  margin-bottom: -1px;
+  border: none;
+  border-bottom: 1px solid var(--xl-grid);
+  margin-bottom: 0;
 }
 :root[data-theme='excel'] .player-list li.me {
   outline: none;
-  border-color: var(--xl-sel);
-  background: var(--xl-sel-fill);
+  border: none;
+  border-bottom: 1px solid var(--xl-grid);
+  background: var(--xl-sel-fill); /* 테두리 박스 없이 셀 채움만 */
 }
 :root[data-theme='excel'] .badge {
   background: var(--xl-header-bg);
@@ -480,16 +485,25 @@
   letter-spacing: 2px;
 }
 
-/* 방 설정 박스 → 셀 표: 각 행이 격자선으로 나뉜 셀 */
+/* 방 설정 → 셀 행 (바깥 박스 없이 각 행이 셀). 셀렉트는 값 셀에 녹아든다(테두리 없음) */
 :root[data-theme='excel'] .room-settings {
   background: #fff;
-  border: 1px solid var(--xl-grid);
+  border: none;
   padding: 0;
   gap: 0;
+  margin: 0;
 }
 :root[data-theme='excel'] .room-settings .setting-row {
-  padding: 9px 12px;
+  padding: 0 12px;
+  min-height: var(--cell-h);
   border-bottom: 1px solid var(--xl-grid);
+}
+:root[data-theme='excel'] .room-settings select {
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--text);
+  font-weight: 600;
 }
 :root[data-theme='excel'] .nudge-btn {
   background: var(--xl-green);
@@ -800,7 +814,7 @@
 /* 떠 있는 카드 박스(테두리·그림자·중앙정렬) 제거 → 폼 각 행이 시트 격자 위의 흰 셀로 직접 앉는다.
    바깥 상자가 없어 배경(격자)과 분리되지 않는다. */
 :root[data-theme='excel'] .card {
-  margin: 0;
+  margin: 24px auto; /* 가로 가운데 */
   max-width: 528px; /* 셀 배수 폭 (11칸) */
   padding: 0;
   border: none;
