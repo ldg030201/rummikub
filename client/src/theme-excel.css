@@ -452,21 +452,21 @@
   color: var(--text);
 }
 
-/* 대기실 참가자 목록 → 셀 행 (테두리 박스 아니라 행 구분선만) */
+/* 대기실 참가자 목록 → 투명 셀 행 (배경 격자 비침). 내 줄만 옅은 초록 채움 */
 :root[data-theme='excel'] .player-list {
   margin: 0;
 }
 :root[data-theme='excel'] .player-list li {
-  background: #fff;
+  background: transparent;
   border: none;
-  border-bottom: 1px solid var(--xl-grid);
   margin-bottom: 0;
+  min-height: var(--cell-h);
+  padding: 0 8px;
 }
 :root[data-theme='excel'] .player-list li.me {
   outline: none;
   border: none;
-  border-bottom: 1px solid var(--xl-grid);
-  background: var(--xl-sel-fill); /* 테두리 박스 없이 셀 채움만 */
+  background: var(--xl-sel-fill);
 }
 :root[data-theme='excel'] .badge {
   background: var(--xl-header-bg);
@@ -485,18 +485,18 @@
   letter-spacing: 2px;
 }
 
-/* 방 설정 → 셀 행 (바깥 박스 없이 각 행이 셀). 셀렉트는 값 셀에 녹아든다(테두리 없음) */
+/* 방 설정 → 투명 셀 행 (배경 격자 비침). 셀렉트는 값 셀에 녹아든다 */
 :root[data-theme='excel'] .room-settings {
-  background: #fff;
+  background: transparent;
   border: none;
   padding: 0;
   gap: 0;
   margin: 0;
 }
 :root[data-theme='excel'] .room-settings .setting-row {
-  padding: 0 12px;
+  padding: 0 8px;
   min-height: var(--cell-h);
-  border-bottom: 1px solid var(--xl-grid);
+  border: none;
 }
 :root[data-theme='excel'] .room-settings select {
   border: none;
@@ -810,12 +810,12 @@
   box-sizing: border-box;
 }
 
-/* ============ 입장/대기실 폼 = 격자 위 셀 (카드 박스 없음) ============ */
-/* 떠 있는 카드 박스(테두리·그림자·중앙정렬) 제거 → 폼 각 행이 시트 격자 위의 흰 셀로 직접 앉는다.
-   바깥 상자가 없어 배경(격자)과 분리되지 않는다. */
+/* ============ 입장/대기실 폼 = 배경 격자에 뚫려 보이는 셀 (불투명 박스 없음) ============ */
+/* 카드는 투명 + JS로 격자에 스냅. 각 행은 투명(배경 격자가 그대로 비침)·셀 높이(--cell-h)라
+   배경 격자선에 앉는다. 라벨=3셀(144px), 값=나머지. 채워진 셀은 버튼·선택 하이라이트뿐. */
 :root[data-theme='excel'] .card {
-  margin: 24px auto; /* 가로 가운데 */
-  max-width: 528px; /* 셀 배수 폭 (11칸) */
+  margin: 24px auto; /* 가로 가운데 (JS 스냅이 격자에 미세보정) */
+  max-width: 528px;
   padding: 0;
   border: none;
   box-shadow: none;
@@ -823,67 +823,74 @@
 }
 :root[data-theme='excel'] .card h1 {
   margin: 0;
-  padding: 6px 12px;
+  padding: 0 8px;
   min-height: var(--cell-h);
   display: flex;
   align-items: center;
   font-size: 16px;
-  background: var(--xl-header-bg);
-  border-bottom: 1px solid var(--xl-grid);
+  background: transparent;
 }
 :root[data-theme='excel'] .card > p,
 :root[data-theme='excel'] .card > .muted,
 :root[data-theme='excel'] .room-share {
   margin: 0;
-  padding: 7px 12px;
-  background: #fff; /* 흰 셀 */
-  border-bottom: 1px solid var(--xl-grid);
+  padding: 0 8px;
+  min-height: var(--cell-h);
+  display: flex;
+  align-items: center;
+  background: transparent;
   font-size: 13px;
 }
-/* 폼: 라벨 = 키 셀, 입력 = 값 셀 (스프레드시트 key:value 행) */
 :root[data-theme='excel'] .join form {
   padding: 0;
 }
 :root[data-theme='excel'] .join form label {
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 144px 1fr; /* 라벨 3셀 | 값 */
   align-items: center;
   gap: 0;
   margin: 0;
-  padding: 0;
-  background: #fff; /* 흰 셀 */
-  border-bottom: 1px solid var(--xl-grid);
+  padding: 0 8px;
+  min-height: var(--cell-h);
+  background: transparent;
   font-size: 13px;
   color: var(--xl-header-text);
 }
-:root[data-theme='excel'] .join form label {
-  padding-left: 12px; /* 라벨 텍스트(1열) 들여쓰기 */
-}
-:root[data-theme='excel'] .join form label input {
+:root[data-theme='excel'] .join form label input,
+:root[data-theme='excel'] .room-settings select {
   border: none;
-  border-left: 1px solid var(--xl-grid);
+  background: transparent;
   border-radius: 0;
-  height: 30px;
+  height: var(--cell-h);
+  color: var(--text);
+}
+:root[data-theme='excel'] .join form label input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--xl-sel); /* 활성 셀 */
 }
 :root[data-theme='excel'] .join .row {
   gap: 0;
 }
 :root[data-theme='excel'] .join .row .ghost {
   border: none;
-  border-left: 1px solid var(--xl-grid);
+  background: transparent;
+  color: var(--xl-green-dark);
+  font-weight: 600;
 }
-/* 카드 안 버튼(열기/시작) = 마지막 병합 셀 행 */
+/* 버튼(열기/시작)만 채워진 셀 */
 :root[data-theme='excel'] .card .primary.big,
 :root[data-theme='excel'] .join form .primary {
   margin: 0;
   border-radius: 0;
   border: none;
-  border-top: 1px solid var(--xl-grid-strong);
 }
 :root[data-theme='excel'] .card .hint {
-  padding: 6px 12px;
+  padding: 0 8px;
+  min-height: var(--cell-h);
+  display: flex;
+  align-items: center;
   margin: 0;
-  background: #fff;
+  background: transparent;
   color: var(--muted);
 }
 

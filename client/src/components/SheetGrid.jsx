@@ -7,6 +7,39 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 const SheetContext = createContext({ cols: 14, cellW: 48, cellH: 36, bodyRef: { current: null } });
 export const useSheet = () => useContext(SheetContext);
 
+// 요소(anchor)를 시트 셀 영역(originRef) 격자 경계로 스냅 — 셀이 배경 격자에 정확히 포개짐.
+export function useGridSnap(anchorRef, enabled, originRef) {
+  const [snap, setSnap] = useState(null);
+  useEffect(() => {
+    if (!enabled) {
+      setSnap(null);
+      return undefined;
+    }
+    const el = anchorRef.current;
+    if (!el) return undefined;
+    const compute = () => {
+      const rs = getComputedStyle(document.documentElement);
+      const w = parseFloat(rs.getPropertyValue('--cell-w')) || 48;
+      const h = parseFloat(rs.getPropertyValue('--cell-h')) || 36;
+      if (!w || !h) return;
+      const r = el.getBoundingClientRect();
+      const o = originRef?.current?.getBoundingClientRect();
+      const off = (v, size) => {
+        const m = ((v % size) + size) % size;
+        return m <= size / 2 ? -m : size - m;
+      };
+      setSnap({ x: off(r.left - (o ? o.left : 0), w), y: off(r.top - (o ? o.top : 0), h) });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(document.body);
+    ro.observe(el);
+    if (originRef?.current) ro.observe(originRef.current);
+    return () => ro.disconnect();
+  }, [anchorRef, enabled, originRef]);
+  return snap;
+}
+
 // 0→A, 25→Z, 26→AA …
 function colLabel(n) {
   let s = '';

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Tile from './Tile.jsx';
 import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
 import { ls, ss } from '../storage.js';
-import { useSheet } from './SheetGrid.jsx';
+import { useSheet, useGridSnap } from './SheetGrid.jsx';
 
 // 유틸
 const clone = (v) =>
@@ -340,44 +340,6 @@ function useMeasured(ref, compute) {
     return () => ro.disconnect();
   }, [ref]);
   return value;
-}
-
-// 배경 시트 격자에 스냅 (엑셀 모드 전용).
-// 셀 컨테이너(anchor)를 격자 원점(originRef=시트 셀 영역)의 격자 경계로 이동시킨다.
-// anchor의 origin 상대 위치를 셀 크기로 나눈 나머지만큼(반 칸 이내로) 보정 → 값 셀이 배경 셀에 포개짐.
-function useGridSnap(anchorRef, enabled, originRef) {
-  const [snap, setSnap] = useState(null);
-  useEffect(() => {
-    if (!enabled) {
-      setSnap(null);
-      return undefined;
-    }
-    const el = anchorRef.current;
-    if (!el) return undefined;
-    const compute = () => {
-      const rs = getComputedStyle(document.documentElement);
-      const w = parseFloat(rs.getPropertyValue('--cell-w')) || parseFloat(rs.getPropertyValue('--xl-cell-w'));
-      const h = parseFloat(rs.getPropertyValue('--cell-h')) || parseFloat(rs.getPropertyValue('--xl-cell-h'));
-      if (!w || !h) return;
-      const r = el.getBoundingClientRect();
-      const o = originRef?.current?.getBoundingClientRect();
-      const baseX = o ? o.left : 0;
-      const baseY = o ? o.top : 0;
-      // 가장 가까운 격자선으로 (이동량은 반 칸 이내)
-      const off = (v, size) => {
-        const m = ((v % size) + size) % size;
-        return m <= size / 2 ? -m : size - m;
-      };
-      setSnap({ x: off(r.left - baseX, w), y: off(r.top - baseY, h) });
-    };
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(document.body);
-    ro.observe(el);
-    if (originRef?.current) ro.observe(originRef.current);
-    return () => ro.disconnect();
-  }, [anchorRef, enabled, originRef]);
-  return snap;
 }
 
 // 턴 카운트다운 — 0.5초 tick 리렌더를 이 작은 컴포넌트 안에 가둔다.
