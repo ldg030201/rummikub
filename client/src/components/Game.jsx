@@ -67,17 +67,16 @@ function reconcilePos(pos, hand, cols) {
       used.add(keyOf(p.r, p.c));
     }
   }
-  // 새 타일(첫 배분/뽑기)은 기존 배치를 건드리지 않게, 마지막 타일 뒤 한 칸 띄우고 이어붙인다.
-  // 아무 배치도 없으면(첫 배분) 앞에서부터 촘촘히 채운다.
+  // 새 타일(첫 배분/뽑기)은 기존 배치를 건드리지 않게 마지막 타일 바로 뒤에 이어붙인다.
+  // (빈틈 없이 이어야 reflowIfAutoPacked가 '자동 배치'로 인식해 폭 변화 시 다시 편다)
   const newTiles = hand.filter((t) => !next[t.id]);
   if (newTiles.length) {
-    const hasExisting = Object.keys(next).length > 0;
     let maxIdx = -1;
     for (const id in next) {
       const i = idxOf(next[id], cols);
       if (i > maxIdx) maxIdx = i;
     }
-    let i = hasExisting ? maxIdx + 2 : 0;
+    let i = maxIdx + 1;
     for (const t of newTiles) {
       let p = posOf(i, cols);
       while (used.has(keyOf(p.r, p.c))) {
@@ -582,6 +581,9 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         ? (parseFloat(gcs.paddingLeft) || 0) + (parseFloat(gcs.paddingRight) || 0)
         : 16;
       const inner = el.clientWidth - padX;
+      // 폭이 아직 0/음수로 측정되면(초기 렌더 레이스) 좁은 4열로 뭉치지 않게 넉넉한 기본값.
+      // 실제 폭이 잡히면 ResizeObserver가 재측정하고, reflowIfAutoPacked가 폭에 맞춰 다시 편다.
+      if (inner <= slotW) return 14;
       return Math.max(4, Math.floor((inner + gap) / (slotW + gap)));
     }) ?? 14;
 
