@@ -147,16 +147,58 @@
 }
 .xl-ribbon-body {
   display: flex;
+  align-items: stretch;
   background: #fff;
   border-top: 1px solid var(--xl-grid);
   overflow-x: auto;
+  height: 64px; /* 실제 리본 본문 높이감 (아이콘 행 + 그룹명) */
 }
-.xl-ribbon-group {
-  padding: 9px 16px;
-  color: #777;
+/* 리본 그룹 = 도구 글리프 행 + 하단 그룹명 + 우하단 대화상자 표시기(↘) */
+.xl-rg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
   border-right: 1px solid var(--xl-grid);
   white-space: nowrap;
-  font-size: 11px;
+}
+.xl-rg-icons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  font-size: 14px;
+  color: #444;
+}
+.xl-rg-icon {
+  min-width: 16px;
+  text-align: center;
+}
+.xl-rg-name {
+  font-size: 10px;
+  color: var(--xl-header-text);
+  text-align: center;
+}
+.xl-rg::after {
+  content: '↘';
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 7px;
+  color: #b0b0b0;
+}
+/* '파일' 탭은 엑셀에서 유일하게 초록 채움 탭 */
+.xl-ribbon-tab.file {
+  background: var(--xl-green);
+  color: #fff;
+  border-bottom-color: var(--xl-green);
+}
+.xl-ribbon-collapse {
+  margin-left: auto;
+  padding: 6px 10px;
+  color: #999;
 }
 
 /* ── 수식 입력줄 ── */
@@ -1369,4 +1411,22 @@
 /* 셀 영역 커서 = 엑셀 십자 */
 :root[data-theme='excel'] .sheet-body {
   cursor: cell;
+}
+
+
+/* ============ 엑셀 스타일 스크롤바 ============ */
+/* macOS 기본 오버레이 스크롤바(반투명 검정 알약)가 가장 티 나는 비-엑셀 흔적이다. */
+:root[data-theme='excel'] .chatx::-webkit-scrollbar {
+  width: 16px;
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-left: 1px solid var(--xl-grid);
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-thumb {
+  background: #cdcdcd;
+  border: 1px solid #b0b0b0;
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
