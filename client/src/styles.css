@@ -721,6 +721,12 @@ button:disabled {
   position: relative;
   flex: 1;
 }
+/* 멜드(absolute)의 기준면. 엑셀 모드에선 이 래퍼만 격자로 이동하고
+   측정용 부모(.melds)는 제자리에 남는다 — useGridSnap 불변조건. */
+.melds-inner {
+  position: absolute;
+  inset: 0;
+}
 :root {
   --btile-w: 36px;
   --btile-h: 48px;

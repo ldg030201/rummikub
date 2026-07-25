@@ -637,7 +637,9 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   });
 
   // 엑셀 모드: 보드(멜드 영역)도 시트 격자에 스냅
+  // 측정은 .melds(제자리), 스냅 이동은 .melds-inner — 불변조건(SheetGrid.jsx) 준수
   const meldsSnap = useGridSnap(meldsRef, excel, sheet.bodyRef);
+  const meldsInnerRef = useRef(null);
 
   const boardLayout = useMemo(() => {
     if (!boardMetrics) return null;
@@ -943,8 +945,11 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const dropOnFelt = (e) => {
     e.preventDefault();
     const drag = takeDrag();
-    if (!drag || !isMyTurn || !draftBoard || !boardMetrics || !meldsRef.current) return;
-    const rect = meldsRef.current.getBoundingClientRect();
+    if (!drag || !isMyTurn || !draftBoard || !boardMetrics) return;
+    // 멜드 좌표는 스냅으로 이동된 안쪽 기준 (바깥은 제자리라 스냅만큼 어긋난다)
+    const anchor = meldsInnerRef.current || meldsRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
     const count = drag.from === 'board' ? 1 : drag.ids.length;
     const w = meldW(count, boardMetrics);
     const row = Math.max(0, Math.floor((e.clientY - rect.top) / boardMetrics.rowH));
@@ -1031,17 +1036,24 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         {board.length === 0 && (
           <div className="empty-table">{t('아직 놓인 조합이 없어', '표시할 데이터가 없습니다')}</div>
         )}
+        {/* 측정은 바깥(.melds), 격자 스냅 이동은 안쪽(.melds-inner).
+            useGridSnap 불변조건: 측정 대상에 transform을 걸면 재측정 때 잔여 오프셋이 0이 나와
+            스냅이 스스로 풀린다(그러면 보드가 튀고 가짜 FLIP까지 재생된다). */}
         <div
           className="melds"
           ref={meldsRef}
-          style={{
-            ...(boardLayout && boardMetrics
+          style={
+            boardLayout && boardMetrics
               ? { minHeight: Math.max(1, boardLayout.rowCount + 1) * boardMetrics.rowH }
-              : null),
-            ...(meldsSnap ? { transform: `translate(${meldsSnap.x}px, ${meldsSnap.y}px)` } : null),
-          }}
+              : undefined
+          }
           onDragOver={isMyTurn ? (e) => e.preventDefault() : undefined}
           onDrop={isMyTurn ? dropOnFelt : undefined}
+        >
+        <div
+          className="melds-inner"
+          ref={meldsInnerRef}
+          style={meldsSnap ? { transform: `translate(${meldsSnap.x}px, ${meldsSnap.y}px)` } : undefined}
         >
           {boardLayout &&
             boardMetrics &&
@@ -1103,6 +1115,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
               {t('+ 새 조합', '+ 새 범위')}
             </div>
           )}
+        </div>
         </div>
 
         {/* 뽑기 더미 — 내 턴엔 클릭으로 한 장 뽑기 */}
