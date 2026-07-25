@@ -26,12 +26,18 @@ export function ExcelRibbon() {
   );
 }
 
-export function ExcelFormulaBar({ cell = 'A1', value = '' }) {
+// 수식 입력줄 — 위장 크롬이지만 '누가 편집 중인지'와 턴 타이머를 실어 나른다(그래서 aria-hidden 아님).
+export function ExcelFormulaBar({ cell = 'A1', value = '', right = null }) {
   return (
-    <div className="xl-formula" aria-hidden="true">
-      <span className="xl-namebox">{cell}</span>
-      <span className="xl-fx">fx</span>
+    <div className="xl-formula">
+      <span className="xl-namebox" aria-hidden="true">
+        {cell}
+      </span>
+      <span className="xl-fx" aria-hidden="true">
+        fx
+      </span>
       <span className="xl-formula-input">{value}</span>
+      {right && <span className="xl-formula-right">{right}</span>}
     </div>
   );
 }

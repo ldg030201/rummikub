@@ -3,7 +3,7 @@ import { useRummikub } from './net.js';
 import { ls } from './storage.js';
 import JoinForm from './components/JoinForm.jsx';
 import WaitingRoom from './components/WaitingRoom.jsx';
-import Game from './components/Game.jsx';
+import Game, { TurnTimer, useDeadlineLocal } from './components/Game.jsx';
 import Chat from './components/Chat.jsx';
 import Toast from './components/Toast.jsx';
 import {
@@ -44,6 +44,20 @@ export default function App() {
   // 상태바에 흘릴 게임값 (엑셀 모드 위장): 손패 수 = 개수, 내 턴 = '입력'
   const handCount = state && typeof state === 'object' ? state.myHand?.length : undefined;
   const statusMode = state?.isMyTurn ? '입력' : '준비';
+
+  // 엑셀 모드: 턴 상태('OOO 님 편집 중')와 남은 시간을 수식 입력줄에 실어 보낸다.
+  // 시트 안에는 격자와 타일만 남겨 배경과 분리된 배너가 생기지 않게 하려는 것.
+  const deadlineLocal = useDeadlineLocal(state);
+  const turnPlayer = joined ? state.players?.find((p) => p.id === state.currentPlayerId) : null;
+  const formulaValue = !joined
+    ? '=SUM(B2:B15)'
+    : state.phase === 'lobby'
+      ? '=WAIT("공유 참가자 대기 중")'
+      : state.phase === 'ended'
+        ? '=LOCK("문서 잠김 — 편집 종료")'
+        : state.isMyTurn
+          ? '=EDIT("입력 모드 — 내가 편집 중")'
+          : `=WAIT("${turnPlayer?.name ?? '동료'} 님 편집 중")`;
   // 엑셀 모드에선 콘텐츠를 진짜 시트 프레임(열머리글·행번호·격자)으로 감싼다
   const wrapSheet = (node) => (excel ? <SheetGrid>{node}</SheetGrid> : node);
 
@@ -123,7 +137,13 @@ export default function App() {
 
       {/* 엑셀 위장 크롬: 리본 + 수식 입력줄 (게임 화면을 스프레드시트로 감싼다) */}
       {excel && <ExcelRibbon />}
-      {excel && <ExcelFormulaBar cell={joined ? 'A1' : ''} value="=SUM(B2:B15)" />}
+      {excel && (
+        <ExcelFormulaBar
+          cell={joined ? 'A1' : ''}
+          value={formulaValue}
+          right={deadlineLocal != null ? <TurnTimer deadline={deadlineLocal} /> : null}
+        />
+      )}
 
       <main className="main">
         {!joined && wrapSheet(<JoinForm onJoin={actions.join} connected={connected} excel={excel} />)}
@@ -131,7 +151,13 @@ export default function App() {
         {joined &&
           (excel ? (
             <SheetGrid>
-              <div className="sheet-game">{mainContent}</div>
+              {/* 대기실 폼은 display:contents라 래퍼 없이 sheet-body 직속이어야 셀이 격자에 붙는다.
+                  게임 보드는 왼쪽 열 범위·FLIP 앵커용 .sheet-game 래퍼가 필요. */}
+              {state.phase === 'lobby' ? (
+                mainContent
+              ) : (
+                <div className="sheet-game">{mainContent}</div>
+              )}
               {chatEl}
             </SheetGrid>
           ) : (

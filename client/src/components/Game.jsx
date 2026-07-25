@@ -342,9 +342,24 @@ function useMeasured(ref, compute) {
   return value;
 }
 
+// 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정).
+// serverNow는 deadline이 갱신된 그 메시지에서 한 번만 읽는다 — 의존성에 넣으면
+// 매 브로드캐스트(상대 draft 스트림 포함)마다 값이 새로 나와 타이머가 재생성된다.
+// 엑셀 모드에선 App의 수식 입력줄도 이 값을 쓰므로 훅으로 뺐다 (state=null 허용).
+export function useDeadlineLocal(state) {
+  const playing = state?.phase === 'playing';
+  const turnDeadline = state?.turnDeadline;
+  const serverNow = state?.serverNow;
+  return useMemo(() => {
+    if (!playing || !turnDeadline || !serverNow) return null;
+    return Date.now() + (turnDeadline - serverNow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, turnDeadline]);
+}
+
 // 턴 카운트다운 — 0.5초 tick 리렌더를 이 작은 컴포넌트 안에 가둔다.
 // (Game 본체에 두면 tick마다 전체 리렌더 + FLIP 위치 측정이 같이 돌아 낭비)
-function TurnTimer({ deadline }) {
+export function TurnTimer({ deadline }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
@@ -366,14 +381,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const isMyTurn = playing && state.isMyTurn;
 
   // ---- 턴 제한시간 카운트다운 ----
-  // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정).
-  // serverNow는 deadline이 갱신된 그 메시지에서 한 번만 읽는다 — 의존성에 넣으면
-  // 매 브로드캐스트(상대 draft 스트림 포함)마다 값이 새로 나와 타이머가 재생성된다.
-  const deadlineLocal = useMemo(() => {
-    if (!playing || !state.turnDeadline || !state.serverNow) return null;
-    return Date.now() + (state.turnDeadline - state.serverNow);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, state.turnDeadline]);
+  const deadlineLocal = useDeadlineLocal(state);
 
   // ---- 타일 이동 애니메이션 (FLIP) ----
   // 렌더마다 타일들의 화면 위치를 기억하고, 위치가 바뀌면 이전 위치→새 위치로 날아가게 한다.
@@ -551,6 +559,12 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
 
   // 엑셀 모드: 손패 셀을 시트 셀 영역(sheet-body) 격자에 스냅
   const rackSnap = useGridSnap(rackScrollRef, excel, sheet.bodyRef);
+  // 액션 버튼(저장/실행취소)·정렬 버튼도 '병합된 셀'처럼 격자에 딱 맞게.
+  // 측정은 바깥 껍데기, 이동은 안쪽 래퍼 (위 불변조건 참고).
+  const actionColRef = useRef(null);
+  const actionSnap = useGridSnap(actionColRef, excel, sheet.bodyRef);
+  const sortBtnsRef = useRef(null);
+  const sortSnap = useGridSnap(sortBtnsRef, excel, sheet.bodyRef);
 
   useEffect(() => {
     setRackPos((p) => reflowIfAutoPacked(reconcilePos(p, myHand, rackCols), rackCols));
@@ -963,18 +977,16 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
 
   return (
     <div className="game" ref={rootRef}>
+      {/* 엑셀 모드: 턴 상태·타이머는 App이 수식 입력줄에 표시한다(시트엔 격자만) → 여기선 합계 힌트만 */}
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
-        {ended ? (
-          <b>{t('게임 종료', '문서 잠김')}</b>
-        ) : isMyTurn ? (
-          <b>{t('내 차례!', '입력 모드')}</b>
-        ) : (
-          <span>
-            {currentPlayer
-              ? `${currentPlayer.name} ${t('님의 차례', '님 편집 중')}`
-              : t('대기 중', '준비')}
-          </span>
-        )}
+        {!excel &&
+          (ended ? (
+            <b>게임 종료</b>
+          ) : isMyTurn ? (
+            <b>내 차례!</b>
+          ) : (
+            <span>{currentPlayer ? `${currentPlayer.name} 님의 차례` : '대기 중'}</span>
+          ))}
         {/* 30점을 채우면(등록 조건 완성) 숨김 — 회수해서 다시 모자라면 재표시 */}
         {!state.brokeIn && isMyTurn && (initialSum ?? 0) < INITIAL_MELD_MIN && (
           <span className="initial-hint">
@@ -982,7 +994,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
             <b className="no">{initialSum ?? 0}</b> / {INITIAL_MELD_MIN}
           </span>
         )}
-        {playing && deadlineLocal != null && <TurnTimer deadline={deadlineLocal} />}
+        {!excel && playing && deadlineLocal != null && <TurnTimer deadline={deadlineLocal} />}
       </div>
 
       {/* 테이블 (보드) */}
@@ -1139,7 +1151,12 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
           <span className="rack-tip muted">
             {t('Shift+드래그 = 블럭 통째로 이동', 'Shift+드래그 = 범위 이동')}
           </span>
-          <div className="sort-btns">
+          {/* 측정용 껍데기(.sort-btns)는 제자리, 안쪽 래퍼만 격자로 이동 */}
+          <div className="sort-btns" ref={sortBtnsRef}>
+            <div
+              className="sort-btns-inner"
+              style={sortSnap ? { transform: `translate(${sortSnap.x}px, ${sortSnap.y}px)` } : undefined}
+            >
             <button
               className="sort-btn"
               onClick={() => sortRack('num')}
@@ -1167,6 +1184,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                 <path d="M12 5v14" />
               </svg>
             </button>
+            </div>
           </div>
         </div>
         <div className="rack-row">
@@ -1221,28 +1239,36 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
 
         {/* 턴 액션: 제출 / 되돌리기 (내 턴에만 활성) */}
         {playing && (
-          <div className="action-col">
-            <button
-              className="action-btn submit"
-              onClick={commit}
-              disabled={!isMyTurn}
-              title={t('제출 — 이번 턴 확정', '저장 — 변경 내용 저장')}
+          <div className="action-col" ref={actionColRef}>
+            {/* 안쪽 래퍼만 이동 — 측정 대상(.action-col)은 제자리에 둬야 스냅이 풀리지 않는다 */}
+            <div
+              className="action-col-inner"
+              style={
+                actionSnap ? { transform: `translate(${actionSnap.x}px, ${actionSnap.y}px)` } : undefined
+              }
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12.5l4.5 4.5L19 7" />
-              </svg>
-            </button>
-            <button
-              className="action-btn undo"
-              onClick={resetTurn}
-              disabled={!isMyTurn}
-              title={t('되돌리기 — 턴 시작 상태로', '실행 취소 — 되돌리기')}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8.5 13.5L4 9l4.5-4.5" />
-                <path d="M4 9h9.5a6.5 6.5 0 0 1 0 13H10" />
-              </svg>
-            </button>
+              <button
+                className="action-btn submit"
+                onClick={commit}
+                disabled={!isMyTurn}
+                title={t('제출 — 이번 턴 확정', '저장 — 변경 내용 저장')}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12.5l4.5 4.5L19 7" />
+                </svg>
+              </button>
+              <button
+                className="action-btn undo"
+                onClick={resetTurn}
+                disabled={!isMyTurn}
+                title={t('되돌리기 — 턴 시작 상태로', '실행 취소 — 되돌리기')}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8.5 13.5L4 9l4.5-4.5" />
+                  <path d="M4 9h9.5a6.5 6.5 0 0 1 0 13H10" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
         </div>
