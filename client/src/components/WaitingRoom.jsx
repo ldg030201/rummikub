@@ -1,6 +1,5 @@
 // 대기실: 참가자 목록 + 방 설정(방장) + 시작
-import { useRef } from 'react';
-import { useSheet, useGridSnap } from './SheetGrid.jsx';
+import { useSheet } from './SheetGrid.jsx';
 
 const TURN_TIME_LABELS = [
   [30000, '30초'],
@@ -25,9 +24,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
   const labelOf = (pairs, v) => pairs.find(([val]) => val === v)?.[1] ?? String(v);
   const effectiveSets =
     s.setCount === 'auto' ? (state.players.length >= 5 ? 2 : 1) : s.setCount;
-  const cardRef = useRef(null);
-  const sheet = useSheet();
-  const snap = useGridSnap(cardRef, excel, sheet.bodyRef); // 폼을 배경 격자에 스냅
+  const sheet = useSheet(); // 엑셀 분기에서 폼을 시트 열 가운데에 놓을 때 사용
 
   // 엑셀 모드: display:contents로 각 셀을 sheet-body 그리드의 실제 셀에 직접 배치
   if (excel) {
@@ -143,11 +140,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
   }
 
   return (
-    <div
-      className="waiting card"
-      ref={cardRef}
-      style={snap ? { transform: `translate(${snap.x}px, ${snap.y}px)` } : undefined}
-    >
+    <div className="waiting card">
       <h1>{t('대기실', '공유 통합 문서')}</h1>
       <div className="room-share">
         {t('방 코드', '문서 코드')} <span className="code">{state.roomId}</span>
