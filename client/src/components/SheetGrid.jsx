@@ -67,18 +67,25 @@ function colLabel(n) {
 }
 
 export function SheetGrid({ children }) {
+  const rootRef = useRef(null);
   const bodyRef = useRef(null);
   const [m, setM] = useState(null); // { cols, rows, cellW, cellH }
 
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el) return undefined;
+    const root = rootRef.current;
+    if (!el || !root) return undefined;
     const measure = () => {
+      // 아직 레이아웃 전(숨은 탭 등)이면 0이 나온다 — 그 값을 박으면 1행짜리 시트로 굳는다.
+      if (!root.clientHeight || !el.clientWidth) return;
       const rs = getComputedStyle(document.documentElement);
       const cellW = parseFloat(rs.getPropertyValue('--cell-w')) || 48;
       const cellH = parseFloat(rs.getPropertyValue('--cell-h')) || 36;
+      const headH = parseFloat(rs.getPropertyValue('--head-h')) || 22;
       const cols = Math.max(1, Math.floor(el.clientWidth / cellW));
-      const rows = Math.max(1, Math.ceil(el.scrollHeight / cellH));
+      // 행 수는 '남은 화면 높이'에서 뽑는다. 콘텐츠 높이(scrollHeight) 기준으로 하면
+      // 채팅이 길어질수록 행이 늘고 → 시트가 아래로 자라 메인이 스크롤되는 되먹임이 생긴다.
+      const rows = Math.max(1, Math.floor((root.clientHeight - headH) / cellH));
       setM((prev) =>
         prev && prev.cols === cols && prev.rows === rows && prev.cellW === cellW && prev.cellH === cellH
           ? prev
@@ -88,6 +95,7 @@ export function SheetGrid({ children }) {
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    ro.observe(root);
     return () => ro.disconnect();
   }, [children]);
 
@@ -95,7 +103,7 @@ export function SheetGrid({ children }) {
   const rows = m?.rows ?? 30;
 
   return (
-    <div className="sheet">
+    <div className="sheet" ref={rootRef}>
       <div className="sheet-corner" />
       <div className="sheet-colhead">
         {Array.from({ length: cols }, (_, c) => (

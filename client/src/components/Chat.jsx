@@ -51,6 +51,7 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
   const [coolLeft, setCoolLeft] = useState(0);
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
+  const stickingRef = useRef(false); // 프로그램이 스크롤을 옮기는 중인지
 
   useEffect(() => {
     if (coolLeft <= 0) return undefined;
@@ -65,12 +66,36 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
 
   useEffect(() => {
     const el = listRef.current;
-    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
+    if (!el) return undefined;
+    const rafs = [];
+    const toBottom = () => {
+      if (!atBottomRef.current || !el.clientHeight) return;
+      stickingRef.current = true; // 내가 옮긴 스크롤 — 아래 onScroll이 사용자 조작으로 오인하지 않게
+      el.scrollTop = el.scrollHeight;
+      rafs.push(
+        requestAnimationFrame(() => {
+          stickingRef.current = false;
+        })
+      );
+    };
+    toBottom();
+    // 입장 시 히스토리처럼 내용이 이 시점 이후에 더 그려지는 경우가 있어 다음 프레임에 한 번 더.
+    rafs.push(requestAnimationFrame(toBottom));
+    // 숨은 탭 등으로 레이아웃이 늦게 잡히면 mount 시점엔 높이가 0이라 스크롤이 안 먹는다.
+    // 높이가 잡히는 순간(창 크기 변경 포함) 다시 맨 아래로 붙인다.
+    const ro = new ResizeObserver(toBottom);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      rafs.forEach(cancelAnimationFrame);
+    };
   }, [messages]);
 
   const onScroll = () => {
     const el = listRef.current;
-    if (!el) return;
+    // 레이아웃 전(높이 0)이거나 내가 옮긴 스크롤이면 판정하지 않는다 —
+    // 그 순간 계산하면 항상 '아래 아님'이 돼 자동 따라가기가 영구히 꺼진다.
+    if (!el || !el.clientHeight || stickingRef.current) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   };
 

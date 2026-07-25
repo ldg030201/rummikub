@@ -543,7 +543,11 @@
 .chatx {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 브라우저 스크롤 앵커링이 렌더 중 위치를 보정하면서 scroll 이벤트를 쏴
+     '사용자가 위로 올렸다'로 오인되어 자동 따라가기가 꺼진다 */
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
   font-size: 12px;
@@ -718,7 +722,9 @@
 .sheet {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  /* 메인(시트)은 절대 스크롤되지 않는다 — 행 수를 가용 높이에 맞춰 채우므로 넘칠 일이 없다.
+     길어지는 건 채팅뿐이고, 그건 채팅 로그(.chatx) 안에서만 스크롤된다. */
+  overflow: hidden;
   display: grid;
   grid-template-columns: var(--gutter-w) 1fr;
   grid-template-rows: var(--head-h) 1fr;
@@ -783,7 +789,10 @@
 .sheet-body {
   grid-row: 2;
   grid-column: 2;
-  min-height: 100%;
+  /* 그리드 아이템 기본 min-height:auto면 자식(채팅) 높이만큼 늘어나 시트를 밀어낸다 */
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   background-color: #fff;
   background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
@@ -806,6 +815,12 @@
 :root[data-theme='excel'] .sheet-body .chat-xl {
   grid-column: -7 / -1;
   grid-row: 1 / -1;
+  /* 그리드 아이템은 min-height:auto가 기본 — 0으로 낮춰야 안쪽 로그가 스크롤된다 */
+  min-height: 0;
+  overflow: hidden;
+  /* 기본 테마의 좁은 화면 규칙(.chat{width:100%;height:220px})이 시트 칼럼을 깨뜨리지 않게 */
+  width: auto;
+  height: auto;
 }
 /* 입장/대기실 폼: display:contents로 자식 셀이 sheet-body 그리드의 셀이 된다 */
 :root[data-theme='excel'] .xl-form {
@@ -1077,7 +1092,8 @@
   align-items: stretch;
 }
 :root[data-theme='excel'] .seat {
-  background: transparent;
+  /* 셀 배수로 딱 맞으니 '채우기 적용된 병합 셀'처럼 배경을 채운다 (경계가 곧 격자선) */
+  background: var(--xl-header-bg);
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -1089,7 +1105,6 @@
   padding: 0 8px;
 }
 :root[data-theme='excel'] .seat.turn {
-  /* 반투명 채움만 — 격자선이 비쳐 배경과 한 겹 */
   background: var(--xl-sel-fill);
   border: none;
 }
@@ -1154,8 +1169,12 @@
   width: calc(var(--cell-w) * 2);
   height: calc(var(--cell-h) * 2);
   border-radius: 0;
-  border: 1px solid var(--xl-grid);
+  border: 1px solid var(--xl-grid-strong);
   box-shadow: none;
+}
+/* 되돌리기도 채우기 있는 셀로 (흰 배경에 묻히지 않게) */
+:root[data-theme='excel'] .action-btn.undo {
+  background: var(--xl-header-bg);
 }
 /* 맞닿은 변의 테두리는 하나만 그린다 — margin으로 겹치면 셀 배수가 깨져 다음 버튼이 행에서 밀린다 */
 :root[data-theme='excel'] .action-col-inner .action-btn + .action-btn {
@@ -1200,6 +1219,12 @@
   height: calc(var(--cell-h) * 3);
   gap: 0;
   justify-content: center;
+  /* 채우기 있는 병합 셀 범위 */
+  background: var(--xl-header-bg);
+  border: 1px solid var(--xl-grid-strong);
+}
+:root[data-theme='excel'] .pool-pile.can-draw:hover {
+  background: var(--xl-sel-fill);
 }
 :root[data-theme='excel'] .pool-tile {
   border-radius: 0;
@@ -1247,7 +1272,21 @@
   border-radius: 0;
   box-shadow: none;
   padding: 0;
+  /* 흰 시트 위 흰 버튼은 경계가 묻힌다 → 채우기로 '버튼 셀'임을 드러낸다 */
+  background: var(--xl-header-bg);
+  border: 1px solid var(--xl-grid-strong);
 }
 :root[data-theme='excel'] .sort-btns .sort-btn + .sort-btn {
   border-left: none;
+}
+:root[data-theme='excel'] .sort-btn:hover:not(:disabled) {
+  background: var(--xl-sel-fill);
+}
+/* 버튼 안 미니 타일은 밑줄·박스를 걷고 색 숫자만 (조각처럼 떠 보이던 원인) */
+:root[data-theme='excel'] .sort-btn .mini-t {
+  background: transparent;
+  border: none;
+  width: auto;
+  height: auto;
+  padding: 0 1px;
 }
