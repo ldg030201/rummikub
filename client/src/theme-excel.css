@@ -1153,3 +1153,220 @@
   height: auto;
   padding: 0 1px;
 }
+
+/* ============================================================
+   상태 표현 = 엑셀의 '조건부 서식' 언어
+   게임 피드백(유효/무효/드롭타겟/거부/준비)을 엑셀 셀 스타일로 번역한다.
+   앞쪽 절들과의 특이성 싸움을 끝내려고 파일 최후미에 한데 모았다.
+   색은 실제 엑셀 셀 스타일 값: 좋음 #C6EFCE/#006100, 나쁨 #FFC7CE/#9C0006, 보통 #FFEB9C/#9C6500
+   ============================================================ */
+:root[data-theme='excel'] {
+  --xl-good-bg: #c6efce;
+  --xl-good-fg: #006100;
+  --xl-bad-bg: #ffc7ce;
+  --xl-bad-fg: #9c0006;
+  --xl-warn-bg: #ffeb9c;
+  --xl-warn-fg: #9c6500;
+}
+
+/* 손패에서 '지금 내면 유효한 3장+' → 좋음 서식 (이전엔 규칙이 덮여 화면에 안 나왔다) */
+:root[data-theme='excel'] .slot .tile.ready {
+  background: var(--xl-good-bg);
+  color: var(--xl-good-fg);
+  box-shadow: none;
+}
+:root[data-theme='excel'] .slot .tile.ready .num {
+  color: inherit;
+}
+
+/* 드롭 타겟 = 엑셀 선택 범위 (굵은 초록 테두리 + 옅은 채우기) */
+:root[data-theme='excel'] .slot.over,
+:root[data-theme='excel'] .meld.over,
+:root[data-theme='excel'] .new-meld.over {
+  background: var(--xl-sel-fill);
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -2px;
+}
+
+/* 조합 = 서식이 걸린 셀 범위 */
+:root[data-theme='excel'] .meld.valid {
+  border-color: var(--xl-green);
+  background: transparent;
+}
+:root[data-theme='excel'] .meld.valid .tile {
+  background: var(--xl-good-bg);
+  color: var(--xl-good-fg);
+}
+:root[data-theme='excel'] .meld.invalid {
+  border-color: var(--xl-bad-fg);
+}
+:root[data-theme='excel'] .meld.invalid .tile {
+  background: var(--xl-bad-bg);
+  color: var(--xl-bad-fg);
+}
+:root[data-theme='excel'] .meld.valid .tile .num,
+:root[data-theme='excel'] .meld.invalid .tile .num {
+  color: inherit;
+}
+
+/* 서버가 커밋을 거부한 조합 = 엑셀 오류 셀 (좌상단 오류 표식 삼각형) */
+:root[data-theme='excel'] .meld.reject {
+  border-color: var(--xl-bad-fg);
+  background: var(--xl-bad-bg);
+  position: absolute; /* .meld의 absolute 유지 */
+}
+:root[data-theme='excel'] .meld.reject::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 5px solid transparent;
+  border-left-color: var(--xl-bad-fg);
+  border-top-color: var(--xl-bad-fg);
+  z-index: 2;
+}
+
+/* 새 범위 자리 = 점선 테두리 (엑셀 '표 삽입' 자리 느낌) */
+:root[data-theme='excel'] .new-meld {
+  border: 1px dashed var(--xl-grid-strong);
+  background: transparent;
+  color: var(--muted);
+}
+
+/* 드래그 중인 원본 타일 */
+:root[data-theme='excel'] .tile.ghost {
+  opacity: 0.35;
+}
+
+/* ============ 인터랙션 피드백 (엑셀 컨트롤 관습) ============ */
+:root[data-theme='excel'] .sort-btn,
+:root[data-theme='excel'] .action-btn,
+:root[data-theme='excel'] .pool-pile,
+:root[data-theme='excel'] .xf-btn,
+:root[data-theme='excel'] .xf-submit,
+:root[data-theme='excel'] .chatx-send,
+:root[data-theme='excel'] .xl-sheet {
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+:root[data-theme='excel'] .action-btn.submit:hover:not(:disabled) {
+  background: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .action-btn.undo:hover:not(:disabled),
+:root[data-theme='excel'] .xf-btn:hover {
+  background: var(--xl-sel-fill);
+}
+:root[data-theme='excel'] .xf-submit:hover:not(:disabled) {
+  background: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .sort-btn:active:not(:disabled),
+:root[data-theme='excel'] .action-btn:active:not(:disabled),
+:root[data-theme='excel'] .xf-btn:active,
+:root[data-theme='excel'] .xf-submit:active:not(:disabled) {
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+/* 비활성 = 회색조 (엑셀은 흐리게만 하고 모양은 유지) */
+:root[data-theme='excel'] .action-btn:disabled,
+:root[data-theme='excel'] .sort-btn:disabled,
+:root[data-theme='excel'] .xf-submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 키보드 접근성 — 엑셀도 포커스 링을 그린다 */
+:root[data-theme='excel'] .sort-btn:focus-visible,
+:root[data-theme='excel'] .action-btn:focus-visible,
+:root[data-theme='excel'] .pool-pile:focus-visible,
+:root[data-theme='excel'] .xf-btn:focus-visible,
+:root[data-theme='excel'] .xf-submit:focus-visible {
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -2px;
+}
+
+/* ============ 위장 붕괴 지점 봉인 ============ */
+/* 화면 가운데 뜨는 오버레이·토스트·전체화면 오렌지 글로우는 '엑셀 화면'에서 가장 먼저 들통난다.
+   전부 엑셀이 실제로 쓰는 알림 형태(상태바 경고줄 / 셀 오류 표식)로 낮춘다. */
+
+/* 재촉 = 전체 화면 오렌지 테두리 펄스 → 수식 입력줄 한 줄 깜빡임 정도로 */
+:root[data-theme='excel'] .nudge-flash {
+  animation: xl-nudge 1.2s ease-out forwards;
+}
+@keyframes xl-nudge {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(16, 124, 65, 0);
+  }
+  15%,
+  60% {
+    box-shadow: inset 0 0 0 2px rgba(16, 124, 65, 0.55);
+  }
+}
+
+/* 승리 오버레이 → 어두운 암막 대신 옅은 흰 막 + 각진 대화상자 (엑셀 모달 톤) */
+:root[data-theme='excel'] .overlay {
+  background: rgba(255, 255, 255, 0.6);
+}
+:root[data-theme='excel'] .overlay-card {
+  background: #fff;
+  border: 1px solid var(--xl-grid-strong);
+  border-top: 3px solid var(--xl-green);
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 22px 32px;
+}
+
+/* 토스트 = 화면 하단 가운데 알약 → 상태바 위에 붙는 각진 경고줄 */
+:root[data-theme='excel'] .toast {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  max-width: none;
+  border-radius: 0;
+  padding: 6px 14px;
+  font-size: 12px;
+  box-shadow: none;
+  border-top: 1px solid var(--xl-grid-strong);
+  animation: none;
+}
+:root[data-theme='excel'] .toast.error {
+  background: var(--xl-bad-bg);
+  color: var(--xl-bad-fg);
+  border-top-color: var(--xl-bad-fg);
+}
+
+/* ============ 활성 셀 = 엑셀의 단일 시그니처 ============ */
+/* 굵은 초록 테두리 + 우하단 채우기 핸들. 엑셀을 아는 사람은 이 초록 사각형 하나로 진짜라고 판단한다. */
+.xl-active {
+  pointer-events: none; /* 게임 조작(드래그/드롭)을 절대 가로막지 않는다 */
+  position: relative;
+  z-index: 4;
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -1px;
+}
+.xl-active::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  box-sizing: border-box;
+  background: var(--xl-sel);
+  border: 1px solid #fff;
+}
+/* 활성 셀이 속한 열/행 머리글도 함께 강조 — 위치를 눈으로 추적하는 엑셀의 핵심 장치 */
+.sheet-col.sel,
+.sheet-rownum.sel {
+  background: #cbe4d5;
+  color: var(--xl-green-dark);
+  font-weight: 600;
+}
+.sheet-col.sel {
+  box-shadow: inset 0 -2px 0 var(--xl-green);
+}
+.sheet-rownum.sel {
+  box-shadow: inset -2px 0 0 var(--xl-green);
+}
+/* 셀 영역 커서 = 엑셀 십자 */
+:root[data-theme='excel'] .sheet-body {
+  cursor: cell;
+}

@@ -20,15 +20,34 @@ const THEMES = [
   ['excel', '📊 엑셀 모드'],
 ];
 
+// 엑셀 모드일 땐 셀렉트 라벨도 위장 어휘로 (화면에 '기본/엑셀 모드'라는 게임 티가 남지 않게)
+const THEMES_EXCEL = [
+  ['default', '표준 보기'],
+  ['excel', '페이지 레이아웃'],
+];
+
+// 엑셀 파비콘 (초록 문서 + 흰 X) — 탭/작업표시줄 위장용
+const EXCEL_FAVICON =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='2' width='24' height='28' rx='2' fill='%23107c41'/%3E%3Cpath d='M11 10l10 12M21 10L11 22' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E";
+
 export default function App() {
   const { connected, me, state, error, reject, chat, nudged, actions } = useRummikub();
   const [toast, setToast] = useState(null);
+  const [activeCell, setActiveCell] = useState('A1'); // 엑셀 이름 상자에 표시할 활성 셀 참조
 
   // 테마: html 루트에 data-theme로 건다 (FLIP 클론이 body에 붙어 .app 밖이라 반드시 :root 스코프)
   const [theme, setTheme] = useState(() => ls.get('rk_theme') || 'default');
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     ls.set('rk_theme', theme);
+    // 위장은 화면 안에서 끝나지 않는다 — 탭 제목·파비콘·작업표시줄이 제일 먼저 보인다.
+    const excelMode = theme === 'excel';
+    document.title = excelMode ? '통합 문서1 - Excel' : '루미큐브';
+    const icon = document.querySelector('link[rel="icon"]');
+    if (icon) {
+      if (!icon.dataset.original) icon.dataset.original = icon.getAttribute('href');
+      icon.setAttribute('href', excelMode ? EXCEL_FAVICON : icon.dataset.original);
+    }
   }, [theme]);
 
   // 서버 에러/거부 메시지를 토스트로
@@ -41,6 +60,7 @@ export default function App() {
 
   const joined = me && state;
   const excel = theme === 'excel';
+  const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
   // 상태바에 흘릴 게임값 (엑셀 모드 위장): 손패 수 = 개수, 내 턴 = '입력'
   const handCount = state && typeof state === 'object' ? state.myHand?.length : undefined;
   const statusMode = state?.isMyTurn ? '입력' : '준비';
@@ -59,7 +79,7 @@ export default function App() {
           ? '=EDIT("입력 모드 — 내가 편집 중")'
           : `=WAIT("${turnPlayer?.name ?? '동료'} 님 편집 중")`;
   // 엑셀 모드에선 콘텐츠를 진짜 시트 프레임(열머리글·행번호·격자)으로 감싼다
-  const wrapSheet = (node) => (excel ? <SheetGrid>{node}</SheetGrid> : node);
+  const wrapSheet = (node) => (excel ? <SheetGrid onSelect={setActiveCell}>{node}</SheetGrid> : node);
 
   const mainContent = joined ? (
     <>
@@ -105,16 +125,19 @@ export default function App() {
             </>
           )}
         </div>
+        {/* 엑셀 모드에선 게임 단어를 전부 엑셀 어휘로 — 정지 화면에서 게임임을 알 수 있는 문자가 없어야 한다 */}
         <div className="conn">
           <span className={`dot ${connected ? 'on' : 'off'}`} />
-          {connected ? '연결됨' : '연결 중...'}
+          {connected ? t('연결됨', '저장됨') : t('연결 중...', '동기화 중...')}
           {joined && (
             <>
-              <span className="sep">|</span>방 <b>{state.roomId}</b>
+              <span className="sep">|</span>
+              {t('방 ', '')}
+              <b>{excel ? `${state.roomId}.xlsx` : state.roomId}</b>
               <span className="sep">|</span>
               {me.name}
               <button className="link-btn" onClick={actions.leave}>
-                나가기
+                {t('나가기', '닫기')}
               </button>
             </>
           )}
@@ -126,7 +149,7 @@ export default function App() {
             title="테마 바꾸기"
             aria-label="테마 선택"
           >
-            {THEMES.map(([v, label]) => (
+            {(excel ? THEMES_EXCEL : THEMES).map(([v, label]) => (
               <option key={v} value={v}>
                 {label}
               </option>
@@ -139,7 +162,7 @@ export default function App() {
       {excel && <ExcelRibbon />}
       {excel && (
         <ExcelFormulaBar
-          cell={joined ? 'A1' : ''}
+          cell={activeCell}
           value={formulaValue}
           right={deadlineLocal != null ? <TurnTimer deadline={deadlineLocal} /> : null}
         />
@@ -150,7 +173,7 @@ export default function App() {
         {/* 엑셀 모드: 게임+채팅을 '하나의 시트'(열 머리글·행번호 한 벌 공유)에 나란히. 기본 모드: 좌우 분리. */}
         {joined &&
           (excel ? (
-            <SheetGrid>
+            <SheetGrid onSelect={setActiveCell}>
               {/* 대기실 폼은 display:contents라 래퍼 없이 sheet-body 직속이어야 셀이 격자에 붙는다.
                   게임 보드는 왼쪽 열 범위·FLIP 앵커용 .sheet-game 래퍼가 필요. */}
               {state.phase === 'lobby' ? (
