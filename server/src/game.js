@@ -52,6 +52,13 @@ export function serializeBase(room) {
       turnDeadline: g.turnDeadline ?? null,
       serverNow: Date.now(),
     });
+
+    // 패 공개(디버그) 모드가 켜진 방에서만 모두의 손패를 실어 보낸다.
+    // 기본은 꺼짐 — 켜면 방의 누구나 남의 패를 볼 수 있으므로 대기실 설정으로만 켤 수 있고,
+    // 설정값은 모두에게 브로드캐스트돼 몰래 켤 수 없다.
+    if (room.settings.revealHands) {
+      base.hands = Object.fromEntries(room.order.map((pid) => [pid, g.racks[pid] ?? []]));
+    }
   }
 
   return base;
@@ -89,7 +96,13 @@ export class Room {
     this.game = null;
     this.chat = []; // { name, text, ts, system } 최근 200개
     // 방 설정 (대기실에서 방장이 변경)
-    this.settings = { turnTimeMs: TURN_TIME_MS, maxPlayers: 6, setCount: 'auto' };
+    // revealHands: 패 공개(디버그) — 켜면 방 전원이 서로의 손패를 볼 수 있다. 기본 꺼짐.
+    this.settings = {
+      turnTimeMs: TURN_TIME_MS,
+      maxPlayers: 6,
+      setCount: 'auto',
+      revealHands: false,
+    };
   }
 
   // 방장(첫 좌석)만 로비에서 설정 변경 가능. 알 수 없는 키/값은 무시·거부.
@@ -110,6 +123,10 @@ export class Room {
     if ('setCount' in patch) {
       if (!SET_COUNT_OPTIONS.includes(patch.setCount)) return { ok: false, reason: '잘못된 세트 수야.' };
       next.setCount = patch.setCount;
+    }
+    if ('revealHands' in patch) {
+      if (typeof patch.revealHands !== 'boolean') return { ok: false, reason: '잘못된 값이야.' };
+      next.revealHands = patch.revealHands;
     }
     this.settings = next;
     return { ok: true };

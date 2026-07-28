@@ -21,7 +21,12 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
   const canStart = state.players.length >= 2 && !spectator;
   const isHost = state.hostId === me.playerId;
   const spectators = state.spectators || [];
-  const s = state.settings || { turnTimeMs: 90000, maxPlayers: 6, setCount: 'auto' };
+  const s = state.settings || {
+    turnTimeMs: 90000,
+    maxPlayers: 6,
+    setCount: 'auto',
+    revealHands: false,
+  };
   const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
 
   const labelOf = (pairs, v) => pairs.find(([val]) => val === v)?.[1] ?? String(v);
@@ -124,6 +129,29 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
             <b>{labelOf(SET_COUNT_LABELS, s.setCount)}</b>
           )}
         </div>
+        {/* 패 공개(디버그) — 켜면 방 전원이 ⌘⌃⌥P로 서로의 패를 볼 수 있다 */}
+        <div className="setting-row">
+          <span className="setting-label">{t('패 공개 (디버그)', '전체 범위 표시')}</span>
+          {isHost ? (
+            <select
+              value={s.revealHands ? 'on' : 'off'}
+              onChange={(e) => onSettings({ revealHands: e.target.value === 'on' })}
+            >
+              <option value="off">끔</option>
+              <option value="on">켬 (⌘⌃⌥P로 보기)</option>
+            </select>
+          ) : (
+            <b>{s.revealHands ? '켬' : '끔'}</b>
+          )}
+        </div>
+        {s.revealHands && (
+          <p className="hint warn">
+            {t(
+              '⚠️ 이 방은 패 공개 모드야 — 참가자 누구나 ⌘⌃⌥P로 서로의 손패를 볼 수 있어.',
+              '⚠️ 이 문서는 전체 범위가 공개돼 있어.'
+            )}
+          </p>
+        )}
         {!isHost && (
           <p className="hint muted">{t('설정은 방장만 바꿀 수 있어.', '설정은 소유자만 바꿀 수 있어.')}</p>
         )}

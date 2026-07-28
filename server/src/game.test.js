@@ -226,7 +226,12 @@ test('settings: 방장만 로비에서 변경 + 화이트리스트 검증', () =
   assert.equal(room.updateSettings('p2', { turnTimeMs: 60000 }).ok, false); // 방장 아님
   const r = room.updateSettings('p1', { turnTimeMs: 60000, maxPlayers: 4, setCount: 2 });
   assert.equal(r.ok, true);
-  assert.deepEqual(room.settings, { turnTimeMs: 60000, maxPlayers: 4, setCount: 2 });
+  assert.deepEqual(room.settings, {
+    turnTimeMs: 60000,
+    maxPlayers: 4,
+    setCount: 2,
+    revealHands: false,
+  });
   assert.equal(room.updateSettings('p1', { turnTimeMs: 12345 }).ok, false);
   assert.equal(room.updateSettings('p1', { maxPlayers: 9 }).ok, false);
   assert.equal(room.updateSettings('p1', { setCount: 3 }).ok, false);
@@ -354,4 +359,37 @@ test('participant: 좌석·관전자 통합 조회', () => {
   assert.equal(room.participant('p1').name, '앨리스');
   assert.equal(room.participant('s1').name, '구경꾼');
   assert.equal(room.participant('없음'), undefined);
+});
+
+// ---- 패 공개(디버그) ----
+
+test('패 공개: 기본은 꺼짐 — 남의 손패는 장수만 나간다', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  assert.equal(room.settings.revealHands, false);
+  const s = serializeState(room, 'p1');
+  assert.equal(s.hands, undefined);
+  assert.equal(s.players.find((p) => p.id === 'p2').handCount, 14);
+});
+
+test('패 공개: 켜면 모두의 손패가 실리고, 설정은 방 전체에 보인다', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.updateSettings('p1', { revealHands: true }).ok, true);
+  room.start();
+  const s = serializeState(room, 'p1');
+  assert.equal(s.settings.revealHands, true); // 몰래 켤 수 없음 — 모두가 설정을 본다
+  assert.equal(s.hands.p2.length, 14);
+  assert.deepEqual(s.hands.p2, room.game.racks.p2);
+  // 관전자에게도 동일하게 보인다
+  room.addSpectator('s1', '구경꾼', sock());
+  assert.equal(serializeState(room, 's1').hands.p1.length, 14);
+});
+
+test('패 공개: 방장만·로비에서만·불리언만', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.updateSettings('p2', { revealHands: true }).ok, false); // 방장 아님
+  assert.equal(room.updateSettings('p1', { revealHands: 'yes' }).ok, false); // 타입 검증
+  assert.equal(room.settings.revealHands, false);
+  room.start();
+  assert.equal(room.updateSettings('p1', { revealHands: true }).ok, false); // 게임 중
 });

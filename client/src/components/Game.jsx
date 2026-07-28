@@ -366,6 +366,23 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const isMyTurn = playing && state.isMyTurn;
   const spectator = !!state.spectator; // 좌석 없이 보기만 하는 관전자 (조작 UI 전부 감춤)
 
+  // ---- 패 공개(디버그) — ⌘⌃⌥P ----
+  // 상대 손패와 그 변화를 좌석에 그대로 펼쳐 본다. 손패 데이터(state.hands)는 방 설정
+  // '패 공개'가 켜진 방에서만 서버가 내려주므로, 이 단축키만으로는 남의 패를 볼 수 없다.
+  const [reveal, setReveal] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      // Alt를 누르면 macOS에서 e.key가 특수문자로 바뀌므로 물리 키(e.code)로 판정
+      if (e.metaKey && e.ctrlKey && e.altKey && e.code === 'KeyP') {
+        e.preventDefault();
+        setReveal((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const revealHands = reveal ? state.hands : null; // { playerId: Tile[] } | null | undefined
+
   // ---- 턴 제한시간 카운트다운 ----
   // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정).
   // serverNow는 deadline이 갱신된 그 메시지에서 한 번만 읽는다 — 의존성에 넣으면
@@ -575,6 +592,14 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   // 렌더링할 보드 (방어적으로 형태 필터)
   const rawBoard = isMyTurn && draftBoard ? draftBoard : state.board;
   const board = Array.isArray(rawBoard) ? rawBoard.filter((m) => m && Array.isArray(m.tiles)) : [];
+  // 지금 보드에 올라와 있는 타일 id. 서버 racks는 커밋 전까지 안 줄어들어서, 패 공개 때
+  // "내려놓는 중"인 타일이 손패에도 같이 보인다 — 이 집합으로 흐리게 구분한다.
+  const onBoardIds = useMemo(() => {
+    const s = new Set();
+    for (const m of board) for (const t of m.tiles) s.add(t.id);
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawBoard]);
 
   // ---- 보드 고정 배치: 폭 측정 + 멜드 자리 계산 ----
   const meldsRef = useRef(null);
@@ -1089,6 +1114,11 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     <div className="game" ref={rootRef}>
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {spectator && <span className="badge watch">{t('👀 관전 중', '👀 읽기 전용')}</span>}
+        {reveal && (
+          <span className="badge reveal" title="⌘⌃⌥P로 끄기">
+            {revealHands ? t('🃏 패 공개 중', '🃏 전체 범위') : t('🔒 패 공개 꺼진 방', '🔒 잠김')}
+          </span>
+        )}
         {ended ? (
           <b>{t('게임 종료', '문서 잠김')}</b>
         ) : isMyTurn ? (
@@ -1129,12 +1159,31 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                 {!p.connected && <span className="seat-off">{t('연결 끊김', '오프라인')}</span>}
               </div>
               <div className="mini-hand">
-                <div className="mini-fan">
-                  {Array.from({ length: Math.min(p.handCount, 24) }, (_, i) => (
-                    <span key={i} className="mini-tile-back" />
-                  ))}
-                  {p.handCount > 24 && <span className="mini-more">…</span>}
-                </div>
+                {revealHands?.[p.id] ? (
+                  /* 패 공개: 뒷면 대신 실제 타일을 펼친다 (서버 브로드캐스트마다 갱신 = 실시간 변화) */
+                  <div className="mini-fan revealed">
+                    {revealHands[p.id].map((rt) => (
+                      <span
+                        key={rt.id}
+                        className={[
+                          'mini-tile-face',
+                          rt.joker ? 'joker' : `c-${rt.color}`,
+                          onBoardIds.has(rt.id) ? 'placing' : '', // 지금 보드에 올려둔 것
+                        ].join(' ')}
+                        title={onBoardIds.has(rt.id) ? '지금 보드에 올려둔 타일' : undefined}
+                      >
+                        {rt.joker ? '★' : rt.num}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mini-fan">
+                    {Array.from({ length: Math.min(p.handCount, 24) }, (_, i) => (
+                      <span key={i} className="mini-tile-back" />
+                    ))}
+                    {p.handCount > 24 && <span className="mini-more">…</span>}
+                  </div>
+                )}
                 <span className="seat-count">{p.handCount}</span>
               </div>
             </div>
