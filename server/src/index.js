@@ -386,10 +386,15 @@ wss.on('connection', (ws, req) => {
 
         // 재접속: 토큰 우선(좌석 → 관전자), 없으면 이름+방코드 일치로 끊긴 좌석 복귀
         let newSpectator = false;
+        // 로비에 빈 좌석이 있는지 — 이름 폴백보다 먼저 봐야 한다
+        const seatFree = room.phase === 'lobby' && room.players.size < room.settings.maxPlayers;
         let playerId = room.reattachByToken(token, ws);
         if (!playerId) playerId = room.reattachSpectatorByToken(token, ws);
         if (!playerId) playerId = room.reattachByName(name, ws);
-        if (!playerId) playerId = room.reattachSpectatorByName(name, ws);
+        // 관전 자리로의 이름 폴백은 '앉을 자리가 없을 때'만. 빈 좌석이 있는데도 예전에
+        // 관전자였다는 이유로 관전에 고착되면, 스스로는 좌석으로 못 돌아온다
+        // (관전자는 PLAYER_ONLY 때문에 newGame조차 못 보낸다).
+        if (!playerId && !seatFree) playerId = room.reattachSpectatorByName(name, ws);
         if (!playerId) {
           // 이름 중복 방지 (좌석·관전자 통틀어)
           const nameTaken = [...room.players.values(), ...room.spectators.values()].some(

@@ -153,8 +153,14 @@ export class Room {
     return entry;
   }
 
+  // 방을 GC해도 되는지. 관전자도 세야 한다 — 좌석만 보면 정원이 차서 관전자가 된 사람들만
+  // 남았을 때 방이 통째로 삭제되고, 그 소켓들은 close 없이 열린 채 남아 화면이 안내도 없이
+  // 영구 정지한다(클라는 onclose/onerror에서만 재연결하므로 스스로 복구도 못 한다).
   isEmpty() {
-    return [...this.players.values()].every((p) => !p.connected);
+    return (
+      [...this.players.values()].every((p) => !p.connected) &&
+      [...this.spectators.values()].every((s) => !s.connected)
+    );
   }
 
   addPlayer(playerId, name, socket) {
@@ -203,10 +209,10 @@ export class Room {
   }
 
   // 관전자 추가 (좌석 없음). 정원 초과면 false.
-  // 끊긴 관전자 자리는 이때 쓸어담는다 — 토큰 재접속을 위해 잠시 남겨둔 것들이라
-  // 새 사람이 올 때 정리하면 맵 크기가 MAX_SPECTATORS로 묶인다.
+  // 끊긴 자리는 '자리가 모자랄 때만' 쓸어담는다 — 무조건 쓸면 새로고침 중인 관전자가
+  // 토큰으로 돌아오기 전에 증발해서, 다른 사람이 입장하는 것만으로 남의 재접속이 깨진다.
   addSpectator(spectatorId, name, socket) {
-    this.sweepSpectators();
+    if (this.spectators.size >= MAX_SPECTATORS) this.sweepSpectators();
     if (this.spectators.size >= MAX_SPECTATORS) return false;
     this.spectators.set(spectatorId, {
       id: spectatorId,
@@ -265,6 +271,16 @@ export class Room {
   // 관전자를 빈 좌석으로 승격 (새 게임으로 로비에 돌아올 때 다음 판에 참여시킨다).
   // 정원이 차거나 이름이 겹치면 관전 상태로 남는다. id/토큰을 그대로 물려받아 재접속이 안 깨진다.
   seatSpectators() {
+    // 게임 중 끊긴 좌석은 players에 남아 있다(재접속 대비). 로비로 돌아온 시점엔 그
+    // '유령 좌석'이 정원만 차지하고 게임엔 못 들어가므로, 승격 전에 먼저 정리한다.
+    // 안 그러면 정원 2인 방에서 한 명이 나가면 관전자가 영영 승격되지 못하고,
+    // 접속 좌석이 1명뿐이라 start()도 거부돼 방이 교착된다.
+    for (const [pid, p] of [...this.players]) {
+      if (!p.connected) {
+        this.players.delete(pid);
+        this.order = this.order.filter((id) => id !== pid);
+      }
+    }
     for (const [sid, s] of [...this.spectators]) {
       if (!s.connected) {
         this.spectators.delete(sid);

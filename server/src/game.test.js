@@ -393,3 +393,39 @@ test('패 공개: 방장만·로비에서만·불리언만', () => {
   room.start();
   assert.equal(room.updateSettings('p1', { revealHands: true }).ok, false); // 게임 중
 });
+
+test('isEmpty: 접속 중인 관전자가 있으면 빈 방이 아니다', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.addSpectator('s1', '구경꾼', sock());
+  room.removeSocket('p1');
+  room.removeSocket('p2');
+  // 좌석은 전부 끊겼지만 관전자가 보고 있다 — GC하면 그 소켓이 안내 없이 죽는다
+  assert.equal(room.isEmpty(), false);
+  room.removeSocket('s1');
+  assert.equal(room.isEmpty(), true);
+});
+
+test('seatSpectators: 게임 중 끊긴 유령 좌석이 정원을 막지 않는다', () => {
+  const room = twoPlayerRoom();
+  room.updateSettings('p1', { maxPlayers: 2 });
+  room.start();
+  room.removeSocket('p2'); // 게임 중 이탈 → 좌석은 남고 connected=false
+  assert.equal(room.players.size, 2); // 유령이 정원을 차지한 상태
+  room.addSpectator('s1', '대기자', sock());
+  room.resetToLobby(); // 새 게임 → 승격 시도
+  assert.equal(room.spectators.size, 0, '관전자가 승격돼야 한다');
+  assert.equal(room.players.has('s1'), true);
+  assert.equal(room.players.has('p2'), false, '유령 좌석은 정리돼야 한다');
+  assert.equal(room.start().ok, true, '2명이 됐으니 시작 가능해야 한다');
+});
+
+test('addSpectator: 새 입장이 새로고침 중인 관전자를 증발시키지 않는다', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.addSpectator('s1', '먼저온사람', sock());
+  const token = room.spectators.get('s1').reconnectToken;
+  room.removeSocket('s1'); // 새로고침 중 (토큰으로 돌아올 예정)
+  room.addSpectator('s2', '나중온사람', sock()); // 그 사이 다른 사람 입장
+  assert.equal(room.reattachSpectatorByToken(token, sock()), 's1', '토큰 재접속이 살아있어야 한다');
+});
