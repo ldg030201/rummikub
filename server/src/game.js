@@ -1,7 +1,7 @@
 // 방(Room) + 게임 상태 관리
 import { randomUUID } from 'node:crypto';
-import { buildPool, shuffle } from './tiles.js';
-import { validateCommit, isBoardShape } from './rules.js';
+import { buildPool, shuffle } from '../../shared/tiles.js';
+import { validateCommit, isBoardShape } from '../../shared/rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
 // 턴 제한시간 기본값. 공식 룰은 1분이지만 온라인 드래그 조작이 실물보다 느려 90초로 완화.

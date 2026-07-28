@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
-import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
+import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../../../shared/rules.js';
 import { ls, ss } from '../storage.js';
 import { useSheet, useGridSnap } from './SheetGrid.jsx';
 

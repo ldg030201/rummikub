@@ -30,16 +30,17 @@ npm test                 # 서버 테스트 (node --test)
 
 ```
 rummikub/
+├─ shared/          # 서버·클라 공용 (단일 원본, 양쪽에서 직접 import)
+│  ├─ rules.js    # 룰 검증: 세트/런/조커·첫 등록 30점·커밋 검증(권위 타일 재구성)
+│  ├─ tiles.js    # 타일 생성/셔플 (1세트=106, 5인↑=2세트=212)
+│  └─ rules.test.js
 ├─ server/src/
 │  ├─ index.js   # HTTP(정적 서빙) + WebSocket(/ws), 방 수명주기·재접속·크래시 방어
 │  ├─ game.js    # Room 클래스: 게임 상태·턴 진행·직렬화(내 손패만 공개)
-│  ├─ rules.js   # 룰 검증: 세트/런/조커·첫 등록 30점·커밋 검증(권위 타일 재구성)
-│  ├─ tiles.js   # 타일 생성/셔플 (1세트=106, 5인↑=2세트=212)
 │  └─ *.test.js  # node --test
 └─ client/src/
    ├─ App.jsx        # 화면 라우팅 (JoinForm / WaitingRoom / Game)
    ├─ net.js         # useRummikub 훅: WS 연결·재접속 토큰·지수 백오프 (sessionStorage)
-   ├─ rules.js       # 실시간 UI 피드백용 룰 미러 (서버 rules.js와 동일해야 함)
    └─ components/     # JoinForm / WaitingRoom / Game(DnD) / Tile / Toast
 ```
 
@@ -67,6 +68,6 @@ rummikub/
 
 ## 작업 시 주의
 
-- `server/src/rules.js`와 `client/src/rules.js`의 룰 로직은 **항상 동일하게** 유지 (미러).
+- 룰 로직은 `shared/rules.js` **한 곳**에만 있다. 서버(`server/src/game.js`)와 클라(`client/src/components/Game.jsx`)가 같은 파일을 import하므로 미러를 따로 맞출 필요 없음. `shared/`는 Node·브라우저 양쪽에서 도는 순수 모듈이라 node 전용 API를 넣으면 안 된다.
 - 룰/게임 로직을 바꾸면 `server/src/*.test.js`를 갱신하고 `npm test` 통과 확인.
 - `client/dist`는 gitignore. 프론트를 바꿨으면 `npm run build`(또는 `run.sh`)로 다시 빌드해야 서버 서빙에 반영됨.

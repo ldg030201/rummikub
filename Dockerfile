@@ -8,6 +8,7 @@ FROM node:22-alpine AS client-build
 WORKDIR /app
 COPY client/package.json client/package-lock.json client/
 RUN npm --prefix client ci
+COPY shared/ shared/
 COPY client/ client/
 RUN npm --prefix client run build
 
@@ -17,6 +18,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY server/package.json server/package-lock.json server/
 RUN npm --prefix server ci --omit=dev
+COPY shared shared
 COPY server/src server/src
 COPY --from=client-build /app/client/dist client/dist
 EXPOSE 8123

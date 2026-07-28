@@ -92,23 +92,24 @@ npm test              # 서버 룰·게임 로직 테스트 (node --test, 44개)
 
 ```
 rummikub/
+├─ shared/            # 서버·클라 공용 모듈 (룰 단일 원본)
+│  ├─ rules.js        # 룰 검증 엔진 (권위 타일 재구성으로 치팅 방지)
+│  ├─ tiles.js        # 타일 생성/셔플
+│  └─ rules.test.js   # 룰 테스트
 ├─ server/src/
 │  ├─ index.js        # HTTP(정적 서빙) + WebSocket(/ws), 방 수명주기·재접속
 │  ├─ game.js         # Room: 게임 상태·턴 진행·직렬화 (내 손패만 공개)
-│  ├─ rules.js        # 룰 검증 엔진 (권위 타일 재구성으로 치팅 방지)
-│  ├─ tiles.js        # 타일 생성/셔플
 │  └─ *.test.js       # 테스트
 ├─ client/src/
 │  ├─ App.jsx         # 화면 라우팅 (입장 → 대기실 → 게임)
 │  ├─ net.js          # WebSocket 훅 (재접속 토큰·지수 백오프)
-│  ├─ rules.js        # 실시간 UI 피드백용 룰 미러 (서버 rules.js와 동일 유지)
 │  └─ components/     # JoinForm / WaitingRoom / Game(DnD) / Tile / Chat / Toast
 ├─ Dockerfile         # 멀티스테이지 (클라 빌드 → 슬림 실행 이미지)
 └─ run.sh             # 로컬 실행 스크립트 (빌드 + 서버)
 ```
 
 - 서버가 **권위(authoritative)**: 클라이언트는 조작을 제안만 하고, 서버가 타일 `id`로 원본을 재구성해 룰 검증 후 브로드캐스트. 상대 손패는 장수만 노출.
-- 룰 로직을 바꿀 땐 `server/src/rules.js`와 `client/src/rules.js`(미러)를 **함께** 수정하고 `npm test` 확인.
+- 룰 로직은 `shared/rules.js` 한 곳에만 있고 서버·클라가 같이 import한다. 고친 뒤 `npm test`로 확인.
 
 ## 보안 메모
 

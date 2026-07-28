@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room, serializeState, TURN_TIME_MS } from './game.js';
-import { T, sock } from './test-helpers.js';
+import { T, sock } from '../../shared/test-helpers.js';
 
 function twoPlayerRoom() {
   const room = new Room('R1');
