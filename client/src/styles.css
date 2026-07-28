@@ -916,11 +916,18 @@ button:disabled {
 .tile.ghost {
   opacity: 0.4;
 }
-/* 터치 드래그: 타일 위 제스처는 스크롤이 아니라 드래그로 (Game.jsx 포인터 폴백) */
+/* 터치 드래그 (Game.jsx 포인터 폴백).
+   touch-action: none이 아니라 pan-y인 이유 — none이면 타일 위에서 시작한 스와이프가
+   전부 드래그가 돼서, 손패가 4줄을 넘어가면 아랫줄로 스크롤할 방법이 사라진다
+   (슬롯 사이 3px 틈을 정확히 눌러야 했다). 대신 '꾹 눌러서' 드래그를 시작하고,
+   집힌 뒤에는 Game.jsx가 touchmove를 preventDefault해서 스크롤을 막는다.
+   long-press 전에는 브라우저의 세로 패닝이 그대로 살아 있다. */
 .tile[draggable='true'] {
-  touch-action: none;
+  touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
+  /* 꾹 누를 때 iOS의 콜아웃 메뉴/텍스트 선택이 뜨지 않게 */
+  -webkit-touch-callout: none;
 }
 /* 손가락을 따라다니는 타일 클론 */
 .touch-ghost {

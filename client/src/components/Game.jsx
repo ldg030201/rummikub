@@ -897,7 +897,13 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
 
   // 슬롯 밖(그리드 여백·틈·패딩)에 드롭되면 가장 가까운 슬롯으로 위임 (데드존 제거)
   const dropOnGrid = (e) => {
-    if (!canDropOnRack()) return;
+    // 못 놓는 경우에도 드래그 상태는 반드시 풀어야 한다 — 안 그러면 원본 타일이
+    // .ghost(opacity:0.4)로 남고 dragRef도 살아 있어 다음 드롭까지 화면이 잘못 보인다.
+    // (마우스는 window의 dragend/drop 안전망이 받아주지만 터치 경로엔 그게 없다.)
+    if (!canDropOnRack()) {
+      onDragEnd();
+      return;
+    }
     const slots = [...e.currentTarget.querySelectorAll('.slot')];
     let best = null;
     let bestD = Infinity;
@@ -912,6 +918,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       }
     }
     if (best) dropOnSlot(e, Number(best.dataset.r), Number(best.dataset.c));
+    else onDragEnd();
   };
 
   // 멜드에 드롭 (블럭이면 통째로)
@@ -1017,15 +1024,42 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     if (newMeld) return { kind: 'new', el: newMeld };
     const meld = el.closest('.meld');
     if (meld) return { kind: 'meld', el: meld };
+    // 좌석·뽑기 더미는 펠트가 아니다 — 여기서 손을 떼면 드롭이 아니라 취소여야 한다.
+    // (마우스 경로는 이 요소들에 dragover/drop 핸들러가 없어서 자연히 무시되는데,
+    //  터치는 elementFromPoint로 조상을 거슬러 올라가느라 .table-area에 걸려버렸다.)
+    if (el.closest('.seat') || el.closest('.seats') || el.closest('.pool-pile')) return null;
     const felt = el.closest('.melds') || el.closest('.table-area');
     if (felt) return { kind: 'felt', el: felt };
     return null;
   };
 
+  // 진행 중이던 터치 드래그를 흔적 없이 정리 (고스트 노드 + 반투명·하이라이트)
+  const cancelTouchDrag = useCallback(() => {
+    const st = touchRef.current;
+    touchRef.current = null;
+    if (!st) return;
+    if (st.timer) clearTimeout(st.timer);
+    st.ghost?.remove();
+    if (st.active) onDragEnd();
+  }, []); // onDragEnd/touchRef는 매 렌더 동일한 참조가 아니지만 상태를 읽지 않아 안전
+
+  // 터치는 '꾹 눌러서' 드래그를 시작한다. 즉시 드래그로 하려면 타일에 touch-action:none이
+  // 필요한데, 그러면 타일 위에서 시작한 스와이프로는 손패를 세로로 스크롤할 수 없다
+  // (손패가 4줄 넘어가면 아랫줄을 볼 방법이 사라진다). 꾹 누르는 동안엔 브라우저 스크롤에
+  // 맡기고, 롱프레스가 성립한 뒤부터 touchmove를 preventDefault해서 스크롤을 막는다.
+  const LONG_PRESS_MS = 220;
+  const TAP_SLOP = 8; // 이만큼 움직이면 '스크롤하려는 것'으로 보고 드래그를 포기
+
   const onTilePointerDown = (e, tile, from) => {
     if (e.pointerType === 'mouse') return; // 마우스는 네이티브 DnD 사용
     if (from === 'board' && !isMyTurn) return; // 손패 정렬은 남의 턴에도 허용
-    touchRef.current = {
+    if (touchRef.current) {
+      // 이미 다른 손가락이 드래그 중 — 덮어쓰면 그 고스트 노드 참조를 잃어버려
+      // position:fixed 클론이 화면에 영구히 박힌다. 먼저 정리한다.
+      cancelTouchDrag();
+    }
+    const st = {
+      pointerId: e.pointerId, // 이 드래그의 주인. 다른 손가락 이벤트는 전부 무시한다.
       tile,
       from,
       el: e.currentTarget,
@@ -1033,22 +1067,31 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       y0: e.clientY,
       active: false,
       ghost: null,
+      timer: null,
     };
+    // 롱프레스 성립 시점에 바로 집는다 — 손가락이 움직이길 기다리면 '잡혔다'는 피드백이 늦다
+    st.timer = setTimeout(() => {
+      st.timer = null;
+      if (touchRef.current !== st) return;
+      st.active = true;
+      dragRef.current = { ids: [st.tile.id], from: st.from };
+      setDragGhostIds(new Set([st.tile.id]));
+      Object.assign(st, makeGhost(st.el, st.x0, st.y0));
+      st.ghost.style.transform = `translate(${st.x0 - st.gx}px, ${st.y0 - st.gy}px)`;
+    }, LONG_PRESS_MS);
+    touchRef.current = st;
   };
 
   // 최신 핸들러를 ref로 들고 window 리스너는 한 번만 건다 (렌더마다 재등록 방지)
   const touchHandlers = useRef({});
   touchHandlers.current.move = (e) => {
     const st = touchRef.current;
-    if (!st) return;
+    if (!st || e.pointerId !== st.pointerId) return; // 남의 손가락 이벤트 무시
     if (!st.active) {
-      if (Math.hypot(e.clientX - st.x0, e.clientY - st.y0) < 8) return; // 탭과 구분
-      st.active = true;
-      dragRef.current = { ids: [st.tile.id], from: st.from };
-      setDragGhostIds(new Set([st.tile.id]));
-      Object.assign(st, makeGhost(st.el, e.clientX, e.clientY));
+      // 아직 롱프레스 전인데 움직였다 → 스크롤하려는 것. 드래그를 포기하고 브라우저에 맡긴다.
+      if (Math.hypot(e.clientX - st.x0, e.clientY - st.y0) >= TAP_SLOP) cancelTouchDrag();
+      return;
     }
-    e.preventDefault(); // 드래그 중 스크롤/당겨서 새로고침 방지
     st.ghost.style.transform = `translate(${e.clientX - st.gx}px, ${e.clientY - st.gy}px)`;
 
     // 드롭 대상 하이라이트 (마우스의 dragover 대응)
@@ -1066,10 +1109,11 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
 
   touchHandlers.current.end = (e) => {
     const st = touchRef.current;
+    if (!st || e.pointerId !== st.pointerId) return; // 남의 손가락이 내 드롭을 확정하지 못하게
     touchRef.current = null;
-    if (!st) return;
+    if (st.timer) clearTimeout(st.timer);
     st.ghost?.remove();
-    if (!st.active) return; // 그냥 탭 — 아무 일도 안 일어남
+    if (!st.active) return; // 롱프레스 전에 뗌 — 그냥 탭
 
     const { clientX: x, clientY: y } = e;
     const target = e.type === 'pointercancel' ? null : targetUnder(x, y);
@@ -1092,16 +1136,25 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   useEffect(() => {
     const move = (e) => touchHandlers.current.move(e);
     const end = (e) => touchHandlers.current.end(e);
-    // passive:false — 드래그 중 preventDefault로 스크롤을 막아야 한다
-    window.addEventListener('pointermove', move, { passive: false });
+    // 스크롤을 막는 건 pointermove의 preventDefault가 아니라 touchmove다
+    // (pointermove는 스크롤에 대해 취소 가능한 이벤트가 아니다). 롱프레스로 집은 뒤
+    // 첫 touchmove를 취소하면 브라우저가 아직 스크롤을 시작하지 않았으므로 확실히 막힌다.
+    const blockScroll = (e) => {
+      if (touchRef.current?.active) e.preventDefault();
+    };
+    window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+    window.addEventListener('touchmove', blockScroll, { passive: false });
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
+      window.removeEventListener('touchmove', blockScroll);
+      // 언마운트(게임 종료·테마 전환·나가기) 시 body에 붙은 고스트 클론이 남지 않게
+      cancelTouchDrag();
     };
-  }, []);
+  }, [cancelTouchDrag]);
 
   // ---- 버튼 ----
   const commit = () => draftBoard && actions.commit(draftBoard);
