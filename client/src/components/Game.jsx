@@ -940,6 +940,129 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     createMeldFromDrag(drag, { row, x });
   };
 
+  // ---- 터치 드래그 ----
+  // HTML5 DnD(dragstart/drop)는 모바일 브라우저에서 발생하지 않는다. 포인터 이벤트로
+  // 드래그를 흉내내되, 드롭은 위의 기존 핸들러를 그대로 재사용한다(로직 이중화 방지).
+  // 합성 이벤트: 핸들러가 쓰는 필드(clientX/Y·currentTarget·preventDefault·stopPropagation)만 채운다.
+  const synthEvent = (x, y, el) => ({
+    clientX: x,
+    clientY: y,
+    currentTarget: el,
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  const touchRef = useRef(null); // { tile, from, x0, y0, active, ghost, gx, gy }
+
+  // 손가락을 따라다니는 타일 클론 (네이티브 드래그 이미지 대체)
+  const makeGhost = (el, x, y) => {
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true);
+    g.className = `${el.className} touch-ghost`;
+    g.style.cssText =
+      `position:fixed;left:0;top:0;margin:0;width:${r.width}px;height:${r.height}px;` +
+      'pointer-events:none;z-index:1000;animation:none;';
+    document.body.appendChild(g);
+    return { ghost: g, gx: x - r.left, gy: y - r.top };
+  };
+
+  // 손가락 아래 요소 → 드롭 대상. 드래그 중엔 고스트가 pointer-events:none 이라 방해하지 않는다.
+  const targetUnder = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const slot = el.closest('.slot');
+    if (slot) return { kind: 'slot', el: slot };
+    if (el.closest('.rack-grid')) return { kind: 'grid', el: el.closest('.rack-grid') };
+    const newMeld = el.closest('.new-meld');
+    if (newMeld) return { kind: 'new', el: newMeld };
+    const meld = el.closest('.meld');
+    if (meld) return { kind: 'meld', el: meld };
+    const felt = el.closest('.melds') || el.closest('.table-area');
+    if (felt) return { kind: 'felt', el: felt };
+    return null;
+  };
+
+  const onTilePointerDown = (e, tile, from) => {
+    if (e.pointerType === 'mouse') return; // 마우스는 네이티브 DnD 사용
+    if (from === 'board' && !isMyTurn) return; // 손패 정렬은 남의 턴에도 허용
+    touchRef.current = {
+      tile,
+      from,
+      el: e.currentTarget,
+      x0: e.clientX,
+      y0: e.clientY,
+      active: false,
+      ghost: null,
+    };
+  };
+
+  // 최신 핸들러를 ref로 들고 window 리스너는 한 번만 건다 (렌더마다 재등록 방지)
+  const touchHandlers = useRef({});
+  touchHandlers.current.move = (e) => {
+    const st = touchRef.current;
+    if (!st) return;
+    if (!st.active) {
+      if (Math.hypot(e.clientX - st.x0, e.clientY - st.y0) < 8) return; // 탭과 구분
+      st.active = true;
+      dragRef.current = { ids: [st.tile.id], from: st.from };
+      setDragGhostIds(new Set([st.tile.id]));
+      Object.assign(st, makeGhost(st.el, e.clientX, e.clientY));
+    }
+    e.preventDefault(); // 드래그 중 스크롤/당겨서 새로고침 방지
+    st.ghost.style.transform = `translate(${e.clientX - st.gx}px, ${e.clientY - st.gy}px)`;
+
+    // 드롭 대상 하이라이트 (마우스의 dragover 대응)
+    const target = targetUnder(e.clientX, e.clientY);
+    if (target?.kind === 'slot' && canDropOnRack()) {
+      setOverSlot(keyOf(Number(target.el.dataset.r), Number(target.el.dataset.c)));
+      setOverTarget(null);
+      return;
+    }
+    setOverSlot(null);
+    if (target?.kind === 'new') setOverTarget('new');
+    else if (target?.kind === 'meld') setOverTarget(target.el.dataset.meldid ?? null);
+    else setOverTarget(null);
+  };
+
+  touchHandlers.current.end = (e) => {
+    const st = touchRef.current;
+    touchRef.current = null;
+    if (!st) return;
+    st.ghost?.remove();
+    if (!st.active) return; // 그냥 탭 — 아무 일도 안 일어남
+
+    const { clientX: x, clientY: y } = e;
+    const target = e.type === 'pointercancel' ? null : targetUnder(x, y);
+    const ev = target ? synthEvent(x, y, target.el) : null;
+    if (target?.kind === 'slot') {
+      dropOnSlot(ev, Number(target.el.dataset.r), Number(target.el.dataset.c));
+    } else if (target?.kind === 'grid') {
+      dropOnGrid(ev);
+    } else if (target?.kind === 'new') {
+      dropIntoNewMeld(ev);
+    } else if (target?.kind === 'meld') {
+      dropIntoMeld(ev, target.el.dataset.meldid);
+    } else if (target?.kind === 'felt') {
+      dropOnFelt(ev);
+    } else {
+      onDragEnd(); // 유효한 곳이 아니면 제자리 (드래그 취소)
+    }
+  };
+
+  useEffect(() => {
+    const move = (e) => touchHandlers.current.move(e);
+    const end = (e) => touchHandlers.current.end(e);
+    // passive:false — 드래그 중 preventDefault로 스크롤을 막아야 한다
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
+
   // ---- 버튼 ----
   const commit = () => draftBoard && actions.commit(draftBoard);
   const resetTurn = () => {
@@ -1042,6 +1165,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
               return (
                 <div
                   key={m.id}
+                  data-meldid={m.id}
                   style={{ left: p.x, top: p.row * boardMetrics.rowH }}
                   className={[
                     'meld',
@@ -1067,6 +1191,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                       draggable={isMyTurn}
                       onDragStart={onDragStartBoard}
                       onDragEnd={onDragEnd}
+                      onPointerDown={(e, tile) => onTilePointerDown(e, tile, 'board')}
                       ghost={dragGhostIds?.has(t.id)}
                     />
                   ))}
@@ -1223,6 +1348,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                         draggable
                         onDragStart={onDragStartRack}
                         onDragEnd={onDragEnd}
+                        onPointerDown={(e, tile) => onTilePointerDown(e, tile, 'rack')}
                         ready={readyIds.has(t.id)}
                         ghost={dragGhostIds?.has(t.id)}
                       />

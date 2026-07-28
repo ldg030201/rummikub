@@ -831,6 +831,18 @@ button:disabled {
 .tile.ghost {
   opacity: 0.4;
 }
+/* 터치 드래그: 타일 위 제스처는 스크롤이 아니라 드래그로 (Game.jsx 포인터 폴백) */
+.tile[draggable='true'] {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 손가락을 따라다니는 타일 클론 */
+.touch-ghost {
+  opacity: 0.92;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
+  transform-origin: center;
+}
 
 /* 손패 (2줄 슬롯 그리드) */
 :root {
@@ -1159,6 +1171,11 @@ button:disabled {
   .brand,
   .conn > * {
     white-space: nowrap;
+  }
+
+  /* 드래그가 '당겨서 새로고침'으로 새지 않게 */
+  body {
+    overscroll-behavior-y: contain;
   }
 
   /* iOS Safari는 16px 미만 입력에 포커스하면 화면을 확대해버린다 */
