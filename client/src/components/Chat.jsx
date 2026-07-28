@@ -55,14 +55,15 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
   const atBottomRef = useRef(true);
   const stickingRef = useRef(false); // 프로그램이 스크롤을 옮기는 중인지
   // 접힌 동안 쌓인 안 읽은 메시지 수 (모바일에서 놓치지 않게)
-  const [seenCount, setSeenCount] = useState(messages.length);
+  const [seenCount, setSeenCount] = useState(0);
   const unread = collapsed ? Math.max(0, messages.length - seenCount) : 0;
-  const toggle = () => {
-    setCollapsed((c) => {
-      if (c) setSeenCount(messages.length);
-      return !c;
-    });
-  };
+  // '펼쳐져 있는 동안'은 계속 읽은 것으로 친다. 접는 순간에만 갱신하면 펼쳐두고 실시간으로
+  // 읽은 메시지들이 접자마자 미읽음으로 되살아난다. 초기값도 0이어야 맞다 —
+  // 마운트 시점엔 chat이 비어 있고 히스토리는 그 뒤에 도착하므로 messages.length는 항상 0이었다.
+  useEffect(() => {
+    if (!collapsed) setSeenCount(messages.length);
+  }, [collapsed, messages.length]);
+  const toggle = () => setCollapsed((c) => !c);
 
   useEffect(() => {
     if (coolLeft <= 0) return undefined;
