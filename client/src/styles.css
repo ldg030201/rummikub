@@ -1282,6 +1282,15 @@ button:disabled {
     max-height: 46vh;
     padding: 10px;
   }
+  /* 상한을 두면 Game.jsx가 .melds에 인라인으로 거는 min-height(=보드 줄 수 × 줄 높이)가
+     그 상한을 넘는 순간 멜드가 펠트 밖으로 흘러 손패를 덮는다 — .meld가 absolute라
+     나무 트레이 '위에' 그려지고 히트테스트까지 가로채 랙 타일을 못 집게 된다.
+     인라인 min-height를 무력화하고(!important 아니면 인라인이 이김) 보드 안에서 스크롤시킨다.
+     .pool-pile은 .table-area 기준 absolute라 여기서 스크롤을 걸어야 더미가 안 딸려 올라간다. */
+  .melds {
+    min-height: 0 !important;
+    overflow: auto;
+  }
   .seats {
     gap: 6px;
     margin-bottom: 10px;
