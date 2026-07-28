@@ -49,8 +49,9 @@ rummikub/
 - **서버가 권위(authoritative)**: 클라는 조작을 제안하고, 서버가 룰 검증 후 모두에게 브로드캐스트. 클라가 보낸 타일의 `color/num/joker` 값은 **신뢰하지 않고** 서버가 tile `id`로 원본을 재구성해 검증한다(치팅 방지).
 - **실시간 draft**: 내 턴엔 로컬에서 타일을 옮기고(draft), 옮길 때마다 관전자에게 실시간 전송. **제출(commit)** 시 서버가 최종 검증. 형식이 깨진 board는 서버가 걸러 크래시/그리핑을 막는다.
 - **재접속**: 최초 join 시 서버가 비밀 `reconnectToken` 발급 → 클라가 sessionStorage에 저장 → 새로고침/재연결 시 토큰으로 좌석 복귀. 토큰이 없으면(탭 닫고 재입장) **이름+방코드 일치 시 끊긴 좌석에 한해 복귀** 폴백. 미제출 draft와 턴은 **유예 타이머(45s)** 로 보존돼 새로고침해도 안 뺏긴다.
-- **방 정리**: 로비면 즉시, 진행/종료 중 빈 방은 5분 재접속 유예 후 GC.
-- **WS 메시지**: `join`(roomId,name,token) / `start` / `draw` / `draft`(board) / `commit`(board) / `chat`(text) / `nudge` / `settings`(방장·로비 한정) / `newGame` / `leave`. 서버→클라: `joined`(playerId,token) / `state`(개인화) / `error` / `commitRejected` / `chat` / `chatHistory`(입장 시 최근 200개) / `nudged`(재촉받은 턴 플레이어에게만).
+- **관전자**(`Room.spectators`, 최대 10명): 진행 중이거나 정원이 찬 방에 들어오면 좌석 대신 관전자가 된다. 보드·좌석·채팅은 보이고 손패는 없음(`state.spectator: true`, `myHand: []`). 서버는 `PLAYER_ONLY` 화이트리스트로 `start/draw/draft/commit/settings/nudge/newGame`을 차단하고 채팅만 허용. 새 게임으로 로비에 돌아올 때 `Room.seatSpectators()`가 빈 좌석으로 승격시키는데, **id와 reconnectToken을 그대로 물려받아** 재접속이 안 깨진다. 관전자는 끊기면 좌석과 달리 즉시 제거.
+- **방 정리**: 로비면 즉시, 진행/종료 중 빈 방은 5분 재접속 유예 후 GC. `isEmpty()`는 좌석 기준이라 관전자만 남은 방은 GC 대상이다.
+- **WS 메시지**: `join`(roomId,name,token) / `start` / `draw` / `draft`(board) / `commit`(board) / `chat`(text) / `nudge` / `settings`(방장·로비 한정) / `newGame` / `leave`. 서버→클라: `joined`(playerId,token) / `state`(개인화 — `spectator` 플래그·`spectators` 목록 포함) / `error` / `commitRejected` / `chat` / `chatHistory`(입장 시 최근 200개) / `nudged`(재촉받은 턴 플레이어에게만).
 - **방 설정**(`Room.settings`, 대기실에서 방장만 변경): 턴 시간(30초~3분·무제한, 기본 90초 `TURN_TIME_MS`), 최대 인원(2~6, join 시 정원 검사), 타일 세트(자동/1/2세트 — 5인↑는 항상 2세트 강제). 서버는 화이트리스트(`TURN_TIME_OPTIONS`/`SET_COUNT_OPTIONS`)로 검증.
 - **턴 제한시간**: 서버가 `turnDeadline`(+`serverNow`)을 state로 내려 클라가 시계 오차 보정 후 카운트다운(무제한이면 null·표시 없음). 만료 시 서버가 draft 폐기·자동 한 장 뽑기·턴 넘김(`Room.timeoutTurn`). 타이머는 deadline 기반이라 draft 갱신엔 리셋 안 되고, 빈 방에선 멈췄다 재접속 시 이어감.
 - **타일 이동 애니메이션(FLIP)**: `Game.jsx`가 렌더마다 타일 위치를 앵커 상대좌표로 기억해 이동 시 이전→새 위치로 비행(body 위 fixed 클론 — overflow 클리핑 회피). 새 타일은 출처 추정(손패=뽑기 더미, 보드=현재 턴 좌석). 상대가 뽑으면(handCount 증가 감지) 더미→그 좌석으로 타일 뒷면 비행. 테이블 오른쪽 아래 **뽑기 더미**는 내 턴에 클릭하면 `draw`.

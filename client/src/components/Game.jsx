@@ -364,6 +364,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
+  const spectator = !!state.spectator; // 좌석 없이 보기만 하는 관전자 (조작 UI 전부 감춤)
 
   // ---- 턴 제한시간 카운트다운 ----
   // 서버 시계 기준 마감시각을 로컬 시계로 환산 (시계 오차 보정).
@@ -964,6 +965,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   return (
     <div className="game" ref={rootRef}>
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
+        {spectator && <span className="badge watch">{t('👀 관전 중', '👀 읽기 전용')}</span>}
         {ended ? (
           <b>{t('게임 종료', '문서 잠김')}</b>
         ) : isMyTurn ? (
@@ -1123,7 +1125,20 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         )}
       </div>
 
-      {/* 내 손패 (2줄 슬롯 — 언제든 정렬 가능) */}
+      {/* 관전자는 손패가 없다 — 조작 영역 대신 안내만 */}
+      {spectator ? (
+        <div className="rack-area watching">
+          <div className="watch-note">
+            <b>{t('👀 관전 중', '👀 읽기 전용 모드')}</b>
+            <span className="muted">
+              {t(
+                '이번 판이 끝나고 새 게임을 시작하면 자동으로 참여돼. 그동안 채팅은 할 수 있어!',
+                '이 문서는 편집 권한이 없어. 다음 문서부터 공동 편집에 참여돼.'
+              )}
+            </span>
+          </div>
+        </div>
+      ) : (
       <div className="rack-area">
         <div className="rack-header">
           <span>
@@ -1247,6 +1262,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         )}
         </div>
       </div>
+      )}
 
       {/* 재촉받음: 화면 테두리 펄스 */}
       {nudgeFx && isMyTurn && <div key={nudgeFx} className="nudge-flash" />}
@@ -1261,9 +1277,18 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                 : t('게임 종료', '문서 잠김')}
             </h1>
             <p className="muted">{t('모든 타일을 먼저 내려놓았어.', '모든 항목을 먼저 입력했어.')}</p>
-            <button className="primary big" onClick={actions.newGame}>
-              {t('새 게임 (대기실로)', '새 통합 문서')}
-            </button>
+            {spectator ? (
+              <p className="hint muted">
+                {t(
+                  '플레이어가 새 게임을 시작하면 다음 판부터 참여돼.',
+                  '편집자가 새 문서를 만들면 다음부터 참여돼.'
+                )}
+              </p>
+            ) : (
+              <button className="primary big" onClick={actions.newGame}>
+                {t('새 게임 (대기실로)', '새 통합 문서')}
+              </button>
+            )}
           </div>
         </div>
       )}

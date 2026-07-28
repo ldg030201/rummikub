@@ -387,6 +387,19 @@ button:disabled {
   background: var(--accent);
   color: #06283d;
 }
+/* 관전자 표식 (상단바·좌석 목록·턴 배너 공용) */
+.badge.watch {
+  background: #3f3a24;
+  color: #e8c76a;
+}
+.spectator-list li {
+  opacity: 0.75;
+}
+.dot.watch {
+  background: none;
+  font-size: 12px;
+  line-height: 1;
+}
 .hint {
   font-size: 13px;
   text-align: center;
@@ -834,6 +847,17 @@ button:disabled {
   background: var(--panel);
   border-radius: 14px;
   padding: 12px 16px;
+}
+/* 관전자: 손패 자리에 안내만 (조작 UI 없음) */
+.rack-area.watching {
+  text-align: center;
+}
+.watch-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  padding: 6px 0;
 }
 .rack-header {
   display: flex;

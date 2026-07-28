@@ -1,7 +1,7 @@
 // game.js (Room) 통합 검증 — 결정적 시나리오
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Room, serializeState, TURN_TIME_MS } from './game.js';
+import { Room, serializeState, TURN_TIME_MS, MAX_SPECTATORS } from './game.js';
 import { T, sock } from '../../shared/test-helpers.js';
 
 function twoPlayerRoom() {
@@ -243,4 +243,95 @@ test('settings: 2세트 강제 반영 + 무제한 턴은 deadline 없음', () =>
   assert.equal(room.game.turnDeadline, null);
   room.draw(room.currentPlayerId());
   assert.equal(room.game.turnDeadline, null); // 턴 넘어가도 무제한 유지
+});
+
+// ---- 관전자 ----
+
+test('관전자: 좌석 없이 보드만 보고 손패는 비어 있음', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  assert.equal(room.addSpectator('s1', '구경꾼', sock()), true);
+
+  const st = serializeState(room, 's1');
+  assert.equal(st.spectator, true);
+  assert.equal(st.isMyTurn, false);
+  assert.deepEqual(st.myHand, []);
+  assert.deepEqual(st.spectators, [{ id: 's1', name: '구경꾼' }]);
+  // 좌석 플레이어에겐 관전 플래그가 안 붙는다
+  assert.equal(serializeState(room, 'p1').spectator, false);
+  // 관전자가 좌석 목록을 오염시키지 않음
+  assert.equal(st.players.length, 2);
+});
+
+test('관전자: 로비 상태에서도 관전 플래그가 내려감', () => {
+  const room = twoPlayerRoom();
+  room.addSpectator('s1', '구경꾼', sock());
+  assert.equal(serializeState(room, 's1').spectator, true);
+  assert.equal(serializeState(room, 'p1').spectator, false);
+});
+
+test('관전자: 새 게임(로비 복귀) 때 빈 좌석으로 승격 — id·토큰 유지', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.addSpectator('s1', '구경꾼', sock());
+  const token = room.spectators.get('s1').reconnectToken;
+
+  room.resetToLobby();
+  assert.equal(room.spectators.size, 0);
+  assert.equal(room.players.get('s1').name, '구경꾼');
+  assert.equal(room.players.get('s1').reconnectToken, token); // 재접속 안 깨짐
+  assert.equal(room.order.includes('s1'), true);
+  assert.equal(serializeState(room, 's1').spectator, false);
+});
+
+test('관전자: 정원이 차 있으면 승격 없이 관전 유지', () => {
+  const room = twoPlayerRoom();
+  room.updateSettings('p1', { maxPlayers: 2 });
+  room.start();
+  room.addSpectator('s1', '구경꾼', sock());
+  room.resetToLobby();
+  assert.equal(room.spectators.size, 1);
+  assert.equal(room.players.has('s1'), false);
+});
+
+test('관전자: 이름이 겹치면 승격하지 않음', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.addSpectator('s1', '앨리스', sock());
+  room.resetToLobby();
+  assert.equal(room.spectators.has('s1'), true);
+  assert.equal(room.players.size, 2);
+});
+
+test('관전자: 끊기면 좌석과 달리 즉시 제거 + 토큰 재접속', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.addSpectator('s1', '구경꾼', sock());
+  const token = room.spectators.get('s1').reconnectToken;
+
+  const ws2 = sock();
+  assert.equal(room.reattachSpectatorByToken(token, ws2), 's1'); // 새로고침 → 같은 자리
+  assert.equal(room.spectators.size, 1);
+  assert.equal(room.spectators.get('s1').socket, ws2);
+
+  room.removeSocket('s1');
+  assert.equal(room.spectators.size, 0);
+  assert.equal(room.reattachSpectatorByToken(token, sock()), null);
+});
+
+test('관전자: 상한(MAX_SPECTATORS) 초과 거부', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  for (let i = 0; i < MAX_SPECTATORS; i += 1) {
+    assert.equal(room.addSpectator(`s${i}`, `구경꾼${i}`, sock()), true);
+  }
+  assert.equal(room.addSpectator('over', '늦둥이', sock()), false);
+});
+
+test('participant: 좌석·관전자 통합 조회', () => {
+  const room = twoPlayerRoom();
+  room.addSpectator('s1', '구경꾼', sock());
+  assert.equal(room.participant('p1').name, '앨리스');
+  assert.equal(room.participant('s1').name, '구경꾼');
+  assert.equal(room.participant('없음'), undefined);
 });

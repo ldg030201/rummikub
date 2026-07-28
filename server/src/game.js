@@ -11,6 +11,8 @@ export const TURN_TIME_MS = 90 * 1000;
 export const TURN_TIME_OPTIONS = [0, 30000, 60000, 90000, 120000, 180000]; // 0 = 무제한
 export const SET_COUNT_OPTIONS = ['auto', 1, 2];
 
+export const MAX_SPECTATORS = 10; // 방당 관전자 상한 (메모리 방어)
+
 // 방 공통 상태 — 수신자와 무관하게 동일한 부분 (브로드캐스트 시 1회만 생성)
 export function serializeBase(room) {
   const players = room.order.map((pid) => {
@@ -29,6 +31,10 @@ export function serializeBase(room) {
     roomId: room.id,
     phase: room.phase, // 'lobby' | 'playing' | 'ended'
     players,
+    // 관전자 (좌석 없이 보기만 하는 사람들)
+    spectators: [...room.spectators.values()]
+      .filter((s) => s.connected)
+      .map((s) => ({ id: s.id, name: s.name })),
     hostId: room.order[0] ?? null,
     settings: room.settings,
   };
@@ -53,11 +59,14 @@ export function serializeBase(room) {
 
 // 수신자별 개인화 — 내 손패만 전체 공개
 export function personalizeState(room, base, forPlayerId) {
-  if (!room.game) return base;
+  // 좌석이 없으면 관전자 (손패 없음·조작 불가)
+  const spectator = !room.players.has(forPlayerId);
+  if (!room.game) return { ...base, spectator };
   const g = room.game;
   const isMyTurn = g.order[g.currentIndex] === forPlayerId;
   return {
     ...base,
+    spectator,
     isMyTurn,
     myHand: g.racks[forPlayerId] ?? [],
     brokeIn: !!g.brokeIn[forPlayerId],
@@ -73,6 +82,8 @@ export class Room {
   constructor(id) {
     this.id = id;
     this.players = new Map(); // playerId -> { id, name, connected, socket }
+    // 관전자 — 진행 중인 방에 새로 들어온 사람. 좌석/손패가 없고 보드와 채팅만 본다.
+    this.spectators = new Map(); // spectatorId -> { id, name, connected, socket, reconnectToken }
     this.order = []; // 좌석 순서 (playerId[])
     this.phase = 'lobby';
     this.game = null;
@@ -174,7 +185,74 @@ export class Room {
     return null;
   }
 
+  // 관전자 추가 (좌석 없음). 정원 초과면 false.
+  addSpectator(spectatorId, name, socket) {
+    if (this.spectators.size >= MAX_SPECTATORS) return false;
+    this.spectators.set(spectatorId, {
+      id: spectatorId,
+      name,
+      connected: true,
+      socket,
+      reconnectToken: randomUUID(),
+    });
+    return true;
+  }
+
+  // 관전자 재접속 (새로고침 시 유령 관전자가 쌓이지 않게 토큰으로 같은 자리 복귀)
+  reattachSpectatorByToken(token, socket) {
+    if (!token) return null;
+    for (const [sid, s] of this.spectators) {
+      if (s.reconnectToken === token) {
+        if (s.socket && s.socket !== socket) {
+          try {
+            s.socket.close();
+          } catch {
+            /* noop */
+          }
+        }
+        s.connected = true;
+        s.socket = socket;
+        return sid;
+      }
+    }
+    return null;
+  }
+
+  // 좌석/관전자 통합 조회 (채팅·연결 확인처럼 둘 다 되는 동작용)
+  participant(id) {
+    return this.players.get(id) ?? this.spectators.get(id);
+  }
+
+  // 관전자를 빈 좌석으로 승격 (새 게임으로 로비에 돌아올 때 다음 판에 참여시킨다).
+  // 정원이 차거나 이름이 겹치면 관전 상태로 남는다. id/토큰을 그대로 물려받아 재접속이 안 깨진다.
+  seatSpectators() {
+    for (const [sid, s] of [...this.spectators]) {
+      if (!s.connected) {
+        this.spectators.delete(sid);
+        continue;
+      }
+      if (this.players.size >= this.settings.maxPlayers) break;
+      const nameTaken = [...this.players.values()].some((p) => p.name === s.name && p.connected);
+      if (nameTaken) continue;
+      this.spectators.delete(sid);
+      this.players.set(sid, {
+        id: sid,
+        name: s.name,
+        connected: true,
+        socket: s.socket,
+        reconnectToken: s.reconnectToken,
+      });
+      if (!this.order.includes(sid)) this.order.push(sid);
+    }
+  }
+
   removeSocket(playerId) {
+    // 관전자는 좌석이 없으니 끊기면 그냥 제거
+    const s = this.spectators.get(playerId);
+    if (s) {
+      this.spectators.delete(playerId);
+      return;
+    }
     const p = this.players.get(playerId);
     if (!p) return;
     p.connected = false;
@@ -315,10 +393,11 @@ export class Room {
     return { ok: true };
   }
 
-  // 로비로 리셋 (새 게임)
+  // 로비로 리셋 (새 게임) — 기다리던 관전자를 빈 좌석으로 올린다
   resetToLobby() {
     this.phase = 'lobby';
     this.game = null;
+    this.seatSpectators();
   }
 }
 

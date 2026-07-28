@@ -71,7 +71,7 @@ export default function App() {
       myId={me.playerId}
       connected={connected}
       onNudge={actions.nudge}
-      nudgeEnabled={state.phase === 'playing' && !state.isMyTurn}
+      nudgeEnabled={state.phase === 'playing' && !state.isMyTurn && !state.spectator}
       excel={excel}
     />
   ) : null;
@@ -99,6 +99,9 @@ export default function App() {
               <span className="sep">|</span>방 <b>{state.roomId}</b>
               <span className="sep">|</span>
               {me.name}
+              {state.spectator && (
+                <span className="badge watch">{excel ? '읽기 전용' : '관전'}</span>
+              )}
               <button className="link-btn" onClick={actions.leave}>
                 나가기
               </button>
