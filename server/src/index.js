@@ -364,6 +364,7 @@ wss.on('connection', (ws, req) => {
         let playerId = room.reattachByToken(token, ws);
         if (!playerId) playerId = room.reattachSpectatorByToken(token, ws);
         if (!playerId) playerId = room.reattachByName(name, ws);
+        if (!playerId) playerId = room.reattachSpectatorByName(name, ws);
         if (!playerId) {
           // 이름 중복 방지 (좌석·관전자 통틀어)
           const nameTaken = [...room.players.values(), ...room.spectators.values()].some(

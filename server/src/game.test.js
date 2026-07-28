@@ -303,20 +303,40 @@ test('관전자: 이름이 겹치면 승격하지 않음', () => {
   assert.equal(room.players.size, 2);
 });
 
-test('관전자: 끊기면 좌석과 달리 즉시 제거 + 토큰 재접속', () => {
+test('관전자: 새로고침(끊김→토큰/이름 재접속)해도 같은 자리로 복귀', () => {
   const room = twoPlayerRoom();
   room.start();
   room.addSpectator('s1', '구경꾼', sock());
   const token = room.spectators.get('s1').reconnectToken;
 
+  // 소켓이 살아있는 채로 새 소켓이 와도 교체
   const ws2 = sock();
-  assert.equal(room.reattachSpectatorByToken(token, ws2), 's1'); // 새로고침 → 같은 자리
+  assert.equal(room.reattachSpectatorByToken(token, ws2), 's1');
   assert.equal(room.spectators.size, 1);
   assert.equal(room.spectators.get('s1').socket, ws2);
 
+  // 먼저 끊긴 뒤 돌아오는 경우(브라우저 새로고침)에도 자리가 남아있어야 한다
   room.removeSocket('s1');
-  assert.equal(room.spectators.size, 0);
-  assert.equal(room.reattachSpectatorByToken(token, sock()), null);
+  assert.equal(room.spectators.get('s1').connected, false);
+  assert.deepEqual(serializeState(room, 'p1').spectators, []); // 끊긴 관전자는 목록에서 숨김
+  assert.equal(room.reattachSpectatorByToken(token, sock()), 's1');
+  assert.equal(room.spectators.size, 1); // 유령 관전자가 안 쌓임
+
+  // 토큰이 없으면 이름으로 폴백 (탭 닫고 재입장)
+  room.removeSocket('s1');
+  assert.equal(room.reattachSpectatorByName('없는사람', sock()), null);
+  assert.equal(room.reattachSpectatorByName('구경꾼', sock()), 's1');
+  assert.equal(room.spectators.get('s1').connected, true);
+});
+
+test('관전자: 끊긴 자리는 새 관전자가 들어올 때 정리 (상한 계산 오염 방지)', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  for (let i = 0; i < MAX_SPECTATORS; i += 1) room.addSpectator(`s${i}`, `구경꾼${i}`, sock());
+  for (let i = 0; i < MAX_SPECTATORS; i += 1) room.removeSocket(`s${i}`);
+  assert.equal(room.spectators.size, MAX_SPECTATORS); // 아직은 재접속 대기
+  assert.equal(room.addSpectator('new', '새구경꾼', sock()), true); // 쓸어담고 자리 확보
+  assert.equal(room.spectators.size, 1);
 });
 
 test('관전자: 상한(MAX_SPECTATORS) 초과 거부', () => {

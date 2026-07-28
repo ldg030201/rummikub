@@ -167,6 +167,28 @@ body {
   justify-content: space-between;
   gap: 8px;
 }
+/* 채팅 접기/펼치기 — 모바일에서만 보인다 (반응형 절에서 display 해제) */
+.chat-toggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.chat-unread {
+  background: var(--no);
+  color: #3b0a0a;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 6px;
+  border-radius: 20px;
+}
 .nudge-btn {
   font-size: 12px;
   font-weight: 700;
@@ -232,35 +254,7 @@ body {
     opacity: 1;
   }
 }
-@media (max-width: 950px) {
-  .layout {
-    flex-direction: column;
-  }
-  .chat {
-    width: 100%;
-    height: 220px;
-  }
-}
-/* 좁은 화면: 손패 슬롯·타일 축소해 가로 스크롤 최소화 */
-@media (max-width: 620px) {
-  :root {
-    --slot-w: 34px;
-    --slot-h: 46px;
-    --btile-w: 28px;
-    --btile-h: 38px;
-  }
-  .tile {
-    width: 30px;
-    height: 42px;
-    font-size: 17px;
-  }
-  .meld .tile {
-    font-size: 14px;
-  }
-  .rack-grid {
-    gap: 3px;
-  }
-}
+/* 반응형 규칙은 이 파일 맨 아래 "반응형" 절에 모아둔다 (뒤 선언에 덮이지 않게) */
 
 /* ---- 카드(로비/입장) ---- */
 .card {
@@ -1104,4 +1098,168 @@ button:disabled {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
   75% { transform: translateX(5px); }
+}
+
+/* ============================================================
+   반응형 — 반드시 파일 맨 끝에 둔다.
+   :root 변수/기본 규칙과 명시도가 같아서 위쪽에 두면 뒤 선언에 덮인다.
+   ============================================================ */
+
+/* 태블릿: 오른쪽 채팅을 본문 아래로 */
+@media (max-width: 950px) {
+  .layout {
+    flex-direction: column;
+  }
+  .chat {
+    width: 100%;
+    height: 220px;
+  }
+}
+
+/* 모바일: 보드 + 손패가 한 화면에 들어오도록 전부 압축 */
+@media (max-width: 700px) {
+  :root {
+    --slot-w: 34px;
+    --slot-h: 46px;
+    --btile-w: 28px;
+    --btile-h: 38px;
+    --meld-pad: 4px;
+    --meld-tile-gap: 2px;
+    --meld-gap: 7px;
+  }
+  .tile {
+    width: 30px;
+    height: 42px;
+    font-size: 17px;
+    border-radius: 5px;
+  }
+  .meld .tile {
+    font-size: 15px;
+  }
+  .rack-grid {
+    gap: 3px;
+    padding: 5px;
+  }
+
+  /* 상단바: 줄바꿈은 허용하되 단어가 세로로 쪼개지지 않게 */
+  .topbar {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding: 8px 10px;
+  }
+  .brand {
+    font-size: 15px;
+  }
+  .conn {
+    font-size: 12px;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .brand,
+  .conn > * {
+    white-space: nowrap;
+  }
+
+  /* iOS Safari는 16px 미만 입력에 포커스하면 화면을 확대해버린다 */
+  input,
+  select,
+  .chat-form input {
+    font-size: 16px;
+  }
+
+  .main {
+    padding: 8px;
+  }
+  .layout {
+    gap: 8px;
+  }
+  .game {
+    gap: 8px;
+  }
+  .card {
+    padding: 16px;
+    margin: 12px auto;
+  }
+  .turn-banner {
+    padding: 8px 10px;
+    gap: 8px;
+    font-size: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* 테이블: 화면을 다 잡아먹지 않게 + 좌석 축소 */
+  /* 보드가 남는 세로를 다 먹지 않게 상한을 둔다 (손패·채팅 자리 확보) */
+  .table-area {
+    min-height: 150px;
+    max-height: 46vh;
+    padding: 10px;
+  }
+  .seats {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .seat {
+    min-width: 0;
+    padding: 6px 9px;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .mini-tile-back {
+    width: 11px;
+    height: 15px;
+    margin-left: -5px;
+  }
+  .empty-table {
+    padding: 16px 0 0;
+  }
+  .pool-pile {
+    right: 8px;
+    bottom: 8px;
+    transform: scale(0.82);
+    transform-origin: bottom right;
+  }
+
+  /* 손패: 2줄까지 보이고 나머지는 스크롤. 액션 버튼도 축소 */
+  .rack-area {
+    padding: 8px 10px;
+  }
+  .rack-header {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .rack-tip {
+    display: none; /* Shift+드래그 안내는 마우스 전용 */
+  }
+  .rack-scroll {
+    max-height: calc(3 * var(--slot-h) + 26px);
+  }
+  .rack-row {
+    gap: 8px;
+  }
+  .action-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* 채팅: 기본은 접어두고 제목 줄을 탭해서 펼침 (게임이 화면 위쪽을 차지하게) */
+  .chat {
+    height: auto;
+    max-height: 45vh;
+  }
+  .chat-toggle {
+    display: inline-flex;
+  }
+  .chat.collapsed {
+    max-height: none;
+  }
+  .chat.collapsed .chat-list,
+  .chat.collapsed .chat-form {
+    display: none;
+  }
+
+  .overlay-card {
+    padding: 24px 20px;
+    margin: 0 16px;
+  }
 }

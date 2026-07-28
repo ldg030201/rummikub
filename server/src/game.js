@@ -186,7 +186,10 @@ export class Room {
   }
 
   // 관전자 추가 (좌석 없음). 정원 초과면 false.
+  // 끊긴 관전자 자리는 이때 쓸어담는다 — 토큰 재접속을 위해 잠시 남겨둔 것들이라
+  // 새 사람이 올 때 정리하면 맵 크기가 MAX_SPECTATORS로 묶인다.
   addSpectator(spectatorId, name, socket) {
+    this.sweepSpectators();
     if (this.spectators.size >= MAX_SPECTATORS) return false;
     this.spectators.set(spectatorId, {
       id: spectatorId,
@@ -218,6 +221,25 @@ export class Room {
     return null;
   }
 
+  // 이름으로 끊긴 관전자 복귀 (토큰이 없을 때 폴백 — reattachByName의 관전자 판)
+  reattachSpectatorByName(name, socket) {
+    for (const [sid, s] of this.spectators) {
+      if (s.name === name && !s.connected) {
+        s.connected = true;
+        s.socket = socket;
+        return sid;
+      }
+    }
+    return null;
+  }
+
+  // 끊긴 관전자 정리
+  sweepSpectators() {
+    for (const [sid, s] of this.spectators) {
+      if (!s.connected) this.spectators.delete(sid);
+    }
+  }
+
   // 좌석/관전자 통합 조회 (채팅·연결 확인처럼 둘 다 되는 동작용)
   participant(id) {
     return this.players.get(id) ?? this.spectators.get(id);
@@ -247,10 +269,12 @@ export class Room {
   }
 
   removeSocket(playerId) {
-    // 관전자는 좌석이 없으니 끊기면 그냥 제거
+    // 관전자는 좌석이 없지만, 새로고침 시 토큰으로 같은 자리에 돌아올 수 있게
+    // 바로 지우지 않고 끊김 표시만 한다 (정리는 sweepSpectators/seatSpectators가).
     const s = this.spectators.get(playerId);
     if (s) {
-      this.spectators.delete(playerId);
+      s.connected = false;
+      s.socket = null;
       return;
     }
     const p = this.players.get(playerId);
