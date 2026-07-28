@@ -381,21 +381,17 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const isMyTurn = playing && state.isMyTurn;
   const spectator = !!state.spectator; // 좌석 없이 보기만 하는 관전자 (조작 UI 전부 감춤)
 
-  // ---- 패 공개(디버그) — ⌘⌃⌥P ----
+  // ---- 패 공개(디버그) ----
   // 상대 손패와 그 변화를 좌석에 그대로 펼쳐 본다. 손패 데이터(state.hands)는 방 설정
-  // '패 공개'가 켜진 방에서만 서버가 내려주므로, 이 단축키만으로는 남의 패를 볼 수 없다.
+  // '패 공개'가 켜진 방에서만 서버가 내려주므로, 이 토글만으로는 남의 패를 볼 수 없다.
+  // 토글은 버튼이다 — 단축키(⌘⌃⌥P)였을 땐 맥 전용인 데다 모바일엔 키보드가 없어서
+  // 방을 켜놔도 절반은 볼 수 없었다. 버튼은 방 설정이 켜진 동안에만 나타난다.
   const [reveal, setReveal] = useState(false);
+  const roomReveal = !!state.settings?.revealHands;
+  // 방장이 도중에 끄면 펼쳐둔 상태도 같이 접는다 (다시 켰을 때 몰래 열려 있지 않게)
   useEffect(() => {
-    const onKey = (e) => {
-      // Alt를 누르면 macOS에서 e.key가 특수문자로 바뀌므로 물리 키(e.code)로 판정
-      if (e.metaKey && e.ctrlKey && e.altKey && e.code === 'KeyP') {
-        e.preventDefault();
-        setReveal((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    if (!roomReveal) setReveal(false);
+  }, [roomReveal]);
   const revealHands = reveal ? state.hands : null; // { playerId: Tile[] } | null | undefined
 
   // ---- 턴 제한시간 카운트다운 ----
@@ -1135,18 +1131,22 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {/* 관전/패공개 뱃지는 두 테마 공통 — 엑셀 수식 입력줄엔 이 정보가 안 실린다 */}
         {spectator && <span className="badge watch">{t('👀 관전 중', '👀 읽기 전용')}</span>}
-        {/* 방 설정이 켜져 있으면 단축키를 아는지와 무관하게 항상 보여야 한다.
-            경고가 대기실에만 있으면 방장이 켜자마자 start를 눌러 노출 시간을 없앨 수 있고,
-            게임 중 난입한 관전자는 로비를 거치지 않아 볼 기회 자체가 없다. */}
-        {state.settings?.revealHands && (
-          <span className="badge reveal-on" title="이 방은 모두의 손패가 서로에게 공개돼 있어">
-            {t('🃏 패 공개된 방 — 내 손패가 모두에게 보여', '🃏 전체 범위 공유 중')}
-          </span>
-        )}
-        {reveal && (
-          <span className="badge reveal" title="⌘⌃⌥P로 끄기">
-            {revealHands ? t('🃏 패 공개 중', '🃏 전체 범위') : t('🔒 패 공개 꺼진 방', '🔒 잠김')}
-          </span>
+        {/* 방 설정이 켜져 있으면 항상 보여야 한다. 경고가 대기실에만 있으면 방장이 켜자마자
+            start를 눌러 노출 시간을 없앨 수 있고, 게임 중 난입한 관전자는 로비를 거치지 않아
+            볼 기회 자체가 없다. 옆의 버튼이 실제로 패를 펼치는 토글. */}
+        {roomReveal && (
+          <>
+            <span className="badge reveal-on" title="이 방은 모두의 손패가 서로에게 공개돼 있어">
+              {t('🃏 패 공개된 방 — 내 손패가 모두에게 보여', '🃏 전체 범위 공유 중')}
+            </span>
+            <button
+              type="button"
+              className={`reveal-btn ${reveal ? 'on' : ''}`}
+              onClick={() => setReveal((v) => !v)}
+            >
+              {reveal ? t('🙈 패 접기', '🙈 범위 접기') : t('🃏 패 보기', '🃏 범위 펼치기')}
+            </button>
+          </>
         )}
         {/* 턴 문구는 엑셀 모드에서 App이 수식 입력줄로 옮겨 표시하므로 여기선 기본 테마만 */}
         {!excel &&

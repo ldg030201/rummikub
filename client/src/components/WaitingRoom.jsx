@@ -150,7 +150,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
           onChange={(e) => onSettings({ revealHands: e.target.value === 'on' })}
         >
           <option value="off">숨김</option>
-          <option value="on">표시 (⌘⌃⌥P)</option>
+          <option value="on">표시</option>
         </select>
       ) : (
         <b>{s.revealHands ? '표시' : '숨김'}</b>
@@ -285,7 +285,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
             <b>{labelOf(SET_COUNT_LABELS, s.setCount)}</b>
           )}
         </div>
-        {/* 패 공개(디버그) — 켜면 방 전원이 ⌘⌃⌥P로 서로의 패를 볼 수 있다 */}
+        {/* 패 공개(디버그) — 켜면 방 전원이 게임 화면의 버튼으로 서로의 패를 볼 수 있다 */}
         <div className="setting-row">
           <span className="setting-label">{t('패 공개 (디버그)', '전체 범위 표시')}</span>
           {isHost ? (
@@ -294,7 +294,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
               onChange={(e) => onSettings({ revealHands: e.target.value === 'on' })}
             >
               <option value="off">끔</option>
-              <option value="on">켬 (⌘⌃⌥P로 보기)</option>
+              <option value="on">켬</option>
             </select>
           ) : (
             <b>{s.revealHands ? '켬' : '끔'}</b>
@@ -303,7 +303,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         {s.revealHands && (
           <p className="hint warn">
             {t(
-              '⚠️ 이 방은 패 공개 모드야 — 참가자 누구나 ⌘⌃⌥P로 서로의 손패를 볼 수 있어.',
+              '⚠️ 이 방은 패 공개 모드야 — 참가자 누구나 게임 화면의 「패 보기」 버튼으로 서로의 손패를 볼 수 있어.',
               '⚠️ 이 문서는 전체 범위가 공개돼 있어.'
             )}
           </p>

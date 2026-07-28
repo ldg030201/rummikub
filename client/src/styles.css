@@ -391,6 +391,26 @@ button:disabled {
   background: #4c1d95;
   color: #ddd6fe;
 }
+/* 패 펼치기 토글 — 단축키 대신 버튼이다(맥 전용 조합이었고 모바일엔 키보드가 없다).
+   방 설정이 켜진 동안에만 렌더되므로 이 버튼만으로 남의 패를 볼 수는 없다. */
+.reveal-btn {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid #6d28d9;
+  background: #4c1d95;
+  color: #ddd6fe;
+  cursor: pointer;
+  /* 모바일 탭 타깃 — 44px 권장이지만 배너 높이에 맞춰 최소한만 확보 */
+  min-height: 28px;
+}
+.reveal-btn:hover {
+  background: #5b21b6;
+}
+.reveal-btn.on {
+  background: #ddd6fe;
+  color: #4c1d95;
+}
 /* 방 설정이 켜진 동안 상시 노출되는 경고 — 내 패가 남에게 보인다는 사실은
    단축키를 눌러본 사람만이 아니라 방의 전원이 알아야 한다. */
 .badge.reveal-on {
@@ -401,7 +421,7 @@ button:disabled {
 .hint.warn {
   color: #fbbf24;
 }
-/* 좌석에 펼친 상대 손패 (⌘⌃⌥P) */
+/* 좌석에 펼친 상대 손패 (「패 보기」 토글) */
 .mini-fan.revealed {
   display: flex;
   flex-wrap: wrap;
@@ -1364,5 +1384,13 @@ button:disabled {
   .overlay-card {
     padding: 24px 20px;
     margin: 0 16px;
+  }
+
+  /* 패 펼치기 토글은 손가락으로 눌러야 하므로 탭 타깃을 키운다 (단축키를 대체한 버튼이라
+     모바일이 바로 이 버튼의 주 사용처다) */
+  .reveal-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 12px;
   }
 }

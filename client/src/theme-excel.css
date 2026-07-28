@@ -489,6 +489,25 @@
   border-color: #9c0006;
   font-weight: 700;
 }
+/* 패 펼치기 토글 — 엑셀에선 리본 토글 버튼처럼 보이게(위장 유지) */
+:root[data-theme='excel'] .reveal-btn {
+  background: var(--xl-header-bg);
+  border: 1px solid var(--xl-grid-strong);
+  color: var(--xl-header-text);
+  border-radius: 2px;
+  font-size: 11px;
+  min-height: 22px;
+  padding: 2px 8px;
+}
+:root[data-theme='excel'] .reveal-btn:hover {
+  background: #e8f2ec;
+  border-color: var(--xl-green);
+}
+:root[data-theme='excel'] .reveal-btn.on {
+  background: var(--xl-green);
+  border-color: var(--xl-green-dark);
+  color: #fff;
+}
 :root[data-theme='excel'] .code {
   background: var(--xl-header-bg);
   border: 1px solid var(--xl-grid);
