@@ -780,9 +780,11 @@
   /* 그리드 아이템은 min-height:auto가 기본 — 0으로 낮춰야 안쪽 로그가 스크롤된다 */
   min-height: 0;
   overflow: hidden;
-  /* 기본 테마의 좁은 화면 규칙(.chat{width:100%;height:220px})이 시트 칼럼을 깨뜨리지 않게 */
+  /* 기본 테마의 좁은 화면 규칙(.chat{width:100%;height:220px;max-height:45vh})이
+     시트 칼럼을 깨뜨리지 않게. 여긴 grid-row: 1/-1로 시트 높이를 그대로 채워야 한다. */
   width: auto;
   height: auto;
+  max-height: none;
 }
 /* 입장/대기실 폼: display:contents로 자식 셀이 sheet-body 그리드의 셀이 된다 */
 :root[data-theme='excel'] .xl-form {
