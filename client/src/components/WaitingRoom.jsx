@@ -64,6 +64,21 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         </div>
       );
     });
+    // 관전자 — 좌석이 없어 기다리는 사람들 (엑셀에선 '읽기 전용으로 보는 중')
+    spectators.forEach((sp) => {
+      cells.push(
+        <div
+          key={`sp-${sp.id}`}
+          className={`xf-cell xf-player watch ${sp.id === me.playerId ? 'me' : ''}`}
+          style={{ ...col(0, FW), gridRow: r++ }}
+        >
+          <span className="dot watch">👀</span>
+          {sp.name}
+          <span className="badge watch">읽기 전용</span>
+          {sp.id === me.playerId && <span className="badge you">나</span>}
+        </div>
+      );
+    });
     const setRow = (label, control) => {
       const rr = r++;
       cells.push(
@@ -125,10 +140,41 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         <b>{labelOf(SET_COUNT_LABELS, s.setCount)}</b>
       )
     );
+    // 패 공개(디버그) — 위장 어휘로 감추더라도 토글 자체는 엑셀 모드에도 있어야 한다.
+    // 없으면 방장이 엑셀 모드에서 이 방이 패 공개 중인지 확인하거나 끌 방법이 사라진다.
+    setRow(
+      '전체 범위 표시',
+      isHost ? (
+        <select
+          value={s.revealHands ? 'on' : 'off'}
+          onChange={(e) => onSettings({ revealHands: e.target.value === 'on' })}
+        >
+          <option value="off">숨김</option>
+          <option value="on">표시 (⌘⌃⌥P)</option>
+        </select>
+      ) : (
+        <b>{s.revealHands ? '표시' : '숨김'}</b>
+      )
+    );
+    if (s.revealHands) {
+      cells.push(
+        <div key="warn" className="xf-cell xf-warn" style={{ ...col(0, FW), gridRow: r++ }}>
+          ⚠️ 이 문서는 전체 범위가 공개돼 있어 — 공유 인원 누구나 서로의 행을 볼 수 있어
+        </div>
+      );
+    }
+    if (!isHost) {
+      cells.push(
+        <div key="nothost" className="xf-cell xf-desc" style={{ ...col(0, FW), gridRow: r++ }}>
+          설정은 소유자만 바꿀 수 있어
+        </div>
+      );
+    }
     cells.push(
       <div key="info" className="xf-cell xf-desc" style={{ ...col(0, FW), gridRow: r++ }}>
-        현재 {state.players.length}명 공유 중 · 편집 시작하면 {effectiveSets}세트({effectiveSets * 106}
-        행) · 각자 14행
+        현재 {state.players.length}명 공유 중
+        {spectators.length > 0 && ` · 읽기 전용 ${spectators.length}명`} · 편집 시작하면{' '}
+        {effectiveSets}세트({effectiveSets * 106}행) · 각자 14행
       </div>
     );
     cells.push(
@@ -140,7 +186,11 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         onClick={onStart}
         disabled={!canStart}
       >
-        {canStart ? '편집 시작 (아무나 눌러도 돼)' : '2명 이상 있어야 시작'}
+        {spectator
+          ? '읽기 전용 — 다음 편집부터 참여돼'
+          : canStart
+            ? '편집 시작 (아무나 눌러도 돼)'
+            : '2명 이상 있어야 시작'}
       </button>
     );
     return <div className="xl-form">{cells}</div>;

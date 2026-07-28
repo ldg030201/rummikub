@@ -922,6 +922,15 @@
   white-space: normal;
   line-height: 1.25;
 }
+/* 경고 셀 — 엑셀 조건부 서식 '나쁨' 서식. 위장보다 경고 전달이 우선인 자리에만 쓴다. */
+:root[data-theme='excel'] .xf-warn {
+  background: #ffc7ce;
+  color: #9c0006;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: normal;
+  line-height: 1.25;
+}
 :root[data-theme='excel'] .xf-label {
   color: var(--xl-header-text);
 }
