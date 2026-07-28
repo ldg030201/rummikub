@@ -688,8 +688,11 @@
      길어지는 건 채팅뿐이고, 그건 채팅 로그(.chatx) 안에서만 스크롤된다. */
   overflow: hidden;
   display: grid;
-  grid-template-columns: var(--gutter-w) 1fr;
-  grid-template-rows: var(--head-h) 1fr;
+  /* minmax(0, ...)가 필수 — 그냥 1fr이면 트랙의 최소가 .sheet-body의 min-content(= 열 수 ×
+     --cell-w)가 돼서, 좁은 화면에서 트랙이 화면보다 넓어진다. 그러면 SheetGrid가 그 넓어진
+     clientWidth를 다시 측정해 열 수를 올리고, 그게 또 min-content를 키우는 래칫이 돈다. */
+  grid-template-columns: var(--gutter-w) minmax(0, 1fr);
+  grid-template-rows: var(--head-h) minmax(0, 1fr);
   background: #fff;
 }
 .sheet-corner {
@@ -753,6 +756,10 @@
   grid-column: 2;
   /* 그리드 아이템 기본 min-height:auto면 자식(채팅) 높이만큼 늘어나 시트를 밀어낸다 */
   min-height: 0;
+  /* 가로도 마찬가지 — min-width:auto면 고정 트랙 합(cols × --cell-w)이 최소 너비가 돼
+     자기 칸보다 넓어지고, 그 넓어진 clientWidth를 SheetGrid가 다시 측정해 cols를 올린다.
+     좁은 화면에서 시트가 화면 밖으로 밀려나가며 오른쪽이 잘리던 래칫의 원인. */
+  min-width: 0;
   height: 100%;
   overflow: hidden;
   background-color: #fff;
@@ -779,6 +786,9 @@
   grid-row: 1 / -1;
   /* 그리드 아이템은 min-height:auto가 기본 — 0으로 낮춰야 안쪽 로그가 스크롤된다 */
   min-height: 0;
+  /* 가로도 같이 풀어야 한다. 안 그러면 채팅 입력줄+버튼의 min-content가 시트의 1fr
+     트랙을 밀어올려, 좁은 화면에서 시트 전체가 화면보다 넓어지고 오른쪽이 잘린다. */
+  min-width: 0;
   overflow: hidden;
   /* 기본 테마의 좁은 화면 규칙(.chat{width:100%;height:220px;max-height:45vh})이
      시트 칼럼을 깨뜨리지 않게. 여긴 grid-row: 1/-1로 시트 높이를 그대로 채워야 한다. */
@@ -1448,4 +1458,39 @@
 }
 :root[data-theme='excel'] .chatx::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* ---- 반응형 (엑셀) ----
+   기본 테마와 같은 이유로 파일 맨 끝에 둔다 — 위쪽 규칙과 명시도가 같아 앞에 두면 덮인다. */
+@media (max-width: 700px) {
+  /* 셀 크기(단일 원본)를 줄인다 — 48px 셀이면 390px 화면에 7칸밖에 안 들어가
+     보드도 손패도 못 쓴다. 손패 슬롯/보드 타일이 전부 이 값에서 파생되므로 여기만 바꾸면 된다. */
+  :root[data-theme='excel'] {
+    --cell-w: 34px;
+    --cell-h: 30px;
+  }
+  /* 패 펼치기 토글의 탭 타깃 확보. 배너는 min-height가 셀 한 칸(--cell-h)이므로
+     세로 패딩을 없애야 버튼을 키워도 배너가 셀 배수를 벗어나지 않는다. */
+  :root[data-theme='excel'] .turn-banner {
+    padding: 0 8px;
+  }
+  :root[data-theme='excel'] .reveal-btn {
+    min-height: 28px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+}
+
+/* 좁은 폭에선 시트 열이 7~8칸뿐인데 .chat-xl이 총 열 수와 무관하게 항상 6칸(-7/-1)을
+   가져가서 .sheet-game(1/-7)이 1~2칸(48~96px)으로 붕괴한다 — 배너가 세로로 터지고
+   격자 정렬(modT)도 깨진다. 좁을 땐 가로로 나누지 말고 위아래로 쌓는다. */
+@media (max-width: 700px) {
+  :root[data-theme='excel'] .sheet-body .sheet-game {
+    grid-column: 1 / -1;
+    grid-row: 1 / -8;
+  }
+  :root[data-theme='excel'] .sheet-body .chat-xl {
+    grid-column: 1 / -1;
+    grid-row: -8 / -1;
+  }
 }
