@@ -481,6 +481,14 @@
   color: #fff;
   border-color: var(--xl-green-dark);
 }
+/* 패 공개 경고는 위장보다 우선한다 — 엑셀 조건부 서식 '나쁨' 색으로 눈에 띄게.
+   위 .badge 규칙이 (0,3,0)이라 기본 테마의 .badge.reveal-on(0,2,0)을 덮어버린다. */
+:root[data-theme='excel'] .badge.reveal-on {
+  background: #ffc7ce;
+  color: #9c0006;
+  border-color: #9c0006;
+  font-weight: 700;
+}
 :root[data-theme='excel'] .code {
   background: var(--xl-header-bg);
   border: 1px solid var(--xl-grid);

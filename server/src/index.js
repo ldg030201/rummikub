@@ -157,6 +157,31 @@ function sysChat(room, text) {
   broadcastChat(room, room.addChat('', text, true));
 }
 
+// 방 설정 변경을 시스템 채팅으로 알린다 (바뀐 항목만).
+// 특히 패 공개는 "몰래 켤 수 없다"는 설계의 실제 근거 — 로비 경고만으로는
+// 켜자마자 start를 눌러 노출 시간을 0에 가깝게 만들 수 있다.
+function announceSettings(room, before, after) {
+  if (before.revealHands !== after.revealHands) {
+    sysChat(
+      room,
+      after.revealHands
+        ? '🃏 방장이 패 공개를 켰어 — 이제 방의 모두가 서로의 손패를 볼 수 있어!'
+        : '🔒 방장이 패 공개를 껐어.'
+    );
+  }
+  if (before.turnTimeMs !== after.turnTimeMs) {
+    const s = after.turnTimeMs === 0 ? '무제한' : `${after.turnTimeMs / 1000}초`;
+    sysChat(room, `⏱ 턴 제한시간이 ${s}로 바뀌었어.`);
+  }
+  if (before.maxPlayers !== after.maxPlayers) {
+    sysChat(room, `👥 최대 인원이 ${after.maxPlayers}명으로 바뀌었어.`);
+  }
+  if (before.setCount !== after.setCount) {
+    const s = after.setCount === 'auto' ? '자동' : `${after.setCount}세트`;
+    sysChat(room, `🀄 타일 세트가 ${s}로 바뀌었어.`);
+  }
+}
+
 // ---- 정적 파일 서빙 ----
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -406,11 +431,17 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'settings': {
+        // updateSettings는 settings 객체를 통째로 갈아끼우므로 이전 값을 먼저 잡아둔다
+        const before = room.settings;
         const r = room.updateSettings(ctx.playerId, msg.settings);
         if (!r.ok) {
           send(ws, { type: 'error', message: r.reason });
           return;
         }
+        // 설정 변경은 방 전체에 흔적을 남긴다. state로 브로드캐스트되긴 하지만 그건
+        // '지금 값'일 뿐이라, 방장이 켜고 곧바로 start를 누르면 대기실 경고가 수 ms만 뜬다.
+        // 채팅은 기록으로 남아서 나중에 들어온 사람도 확인할 수 있다.
+        announceSettings(room, before, room.settings);
         pushState(room);
         break;
       }

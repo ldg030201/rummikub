@@ -391,6 +391,13 @@ button:disabled {
   background: #4c1d95;
   color: #ddd6fe;
 }
+/* 방 설정이 켜진 동안 상시 노출되는 경고 — 내 패가 남에게 보인다는 사실은
+   단축키를 눌러본 사람만이 아니라 방의 전원이 알아야 한다. */
+.badge.reveal-on {
+  background: #7f1d1d;
+  color: #fecaca;
+  font-weight: 700;
+}
 .hint.warn {
   color: #fbbf24;
 }

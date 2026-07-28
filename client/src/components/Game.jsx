@@ -1135,6 +1135,14 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
         {/* 관전/패공개 뱃지는 두 테마 공통 — 엑셀 수식 입력줄엔 이 정보가 안 실린다 */}
         {spectator && <span className="badge watch">{t('👀 관전 중', '👀 읽기 전용')}</span>}
+        {/* 방 설정이 켜져 있으면 단축키를 아는지와 무관하게 항상 보여야 한다.
+            경고가 대기실에만 있으면 방장이 켜자마자 start를 눌러 노출 시간을 없앨 수 있고,
+            게임 중 난입한 관전자는 로비를 거치지 않아 볼 기회 자체가 없다. */}
+        {state.settings?.revealHands && (
+          <span className="badge reveal-on" title="이 방은 모두의 손패가 서로에게 공개돼 있어">
+            {t('🃏 패 공개된 방 — 내 손패가 모두에게 보여', '🃏 전체 범위 공유 중')}
+          </span>
+        )}
         {reveal && (
           <span className="badge reveal" title="⌘⌃⌥P로 끄기">
             {revealHands ? t('🃏 패 공개 중', '🃏 전체 범위') : t('🔒 패 공개 꺼진 방', '🔒 잠김')}
