@@ -67,21 +67,26 @@ export function serializeBase(room) {
   return base;
 }
 
-// 수신자별 개인화 — 내 손패만 전체 공개
-export function personalizeState(room, base, forPlayerId) {
+// 수신자별로만 달라지는 필드 (base와 키가 겹치지 않는다).
+// 브로드캐스트에서 base 문자열을 재사용하려고 개인화 부분만 따로 뽑아 쓴다.
+export function personalFields(room, forPlayerId) {
   // 좌석이 없으면 관전자 (손패 없음·조작 불가)
   const spectator = !room.players.has(forPlayerId);
-  if (!room.game) return { ...base, spectator };
+  if (!room.game) return { spectator };
   const g = room.game;
   const isMyTurn = g.order[g.currentIndex] === forPlayerId;
   return {
-    ...base,
     spectator,
     isMyTurn,
     myHand: g.racks[forPlayerId] ?? [],
     brokeIn: !!g.brokeIn[forPlayerId],
     turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
   };
+}
+
+// 수신자별 개인화 — 내 손패만 전체 공개
+export function personalizeState(room, base, forPlayerId) {
+  return { ...base, ...personalFields(room, forPlayerId) };
 }
 
 export function serializeState(room, forPlayerId) {
