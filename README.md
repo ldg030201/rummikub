@@ -88,7 +88,7 @@ cd rummikub
 npm run install:all   # server + client 의존성 설치 (최초 1회)
 npm run dev:server    # 실시간 서버 (8123)
 npm run dev:client    # Vite 개발 서버 (5173, HMR) — 8123 웹소켓에 자동 연결
-npm test              # 서버 룰·게임 로직 테스트 (node --test, 44개)
+npm test              # 룰·게임 로직 테스트 (node --test)
 ```
 
 ### 구조

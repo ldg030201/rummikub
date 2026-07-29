@@ -39,9 +39,14 @@ rummikub/
 │  ├─ game.js    # Room 클래스: 게임 상태·턴 진행·직렬화(내 손패만 공개)
 │  └─ *.test.js  # node --test
 └─ client/src/
-   ├─ App.jsx        # 화면 라우팅 (JoinForm / WaitingRoom / Game)
-   ├─ net.js         # useRummikub 훅: WS 연결·재접속 토큰·지수 백오프 (sessionStorage)
-   └─ components/     # JoinForm / WaitingRoom / Game(DnD) / Tile / Toast
+   ├─ main.jsx          # 부트스트랩 — 첫 페인트 '전에' data-theme을 걸어야 한다(아래 엑셀 항목)
+   ├─ App.jsx           # 화면 라우팅 + 테마 상태 + 엑셀 위장 크롬(리본·수식줄·시트탭·상태바)
+   ├─ net.js            # useRummikub 훅: WS 연결·재접속 토큰·지수 백오프
+   ├─ storage.js        # ss/ls 안전 래퍼 + 재접속 토큰 키(rk_tok_<방>_<이름>)
+   ├─ styles.css        # 기본 테마 (@media는 반드시 파일 맨 끝)
+   ├─ theme-excel.css   # 엑셀 위장 테마 (@media도 파일 맨 끝)
+   └─ components/       # JoinForm / WaitingRoom / Game(DnD) / Tile / Toast / Chat
+                        #  + SheetGrid(시트 격자·활성 셀) / ExcelFrame(리본·수식줄·시트탭·상태바)
 ```
 
 ## 아키텍처 핵심
@@ -55,6 +60,12 @@ rummikub/
 - **방 설정**(`Room.settings`, 대기실에서 방장만 변경): 턴 시간(30초~3분·무제한, 기본 90초 `TURN_TIME_MS`), 최대 인원(2~6, join 시 정원 검사), 타일 세트(자동/1/2세트 — 5인↑는 항상 2세트 강제), 패 공개(`revealHands`, 기본 꺼짐). 서버는 화이트리스트(`TURN_TIME_OPTIONS`/`SET_COUNT_OPTIONS`)로 검증.
 - **턴 제한시간**: 서버가 `turnDeadline`(+`serverNow`)을 state로 내려 클라가 시계 오차 보정 후 카운트다운(무제한이면 null·표시 없음). 만료 시 서버가 draft 폐기·자동 한 장 뽑기·턴 넘김(`Room.timeoutTurn`). 타이머는 deadline 기반이라 draft 갱신엔 리셋 안 되고, 빈 방에선 멈췄다 재접속 시 이어감.
 - **패 공개(디버그)**: 방 설정 `revealHands`(기본 꺼짐, 대기실에서 방장만)를 켜면 서버가 `state.hands`(`{playerId: Tile[]}`)를 방 전원에게 내려준다. 클라는 턴 배너의 **「패 보기」 버튼**(`.reveal-btn` — 방 설정이 켜진 동안에만 렌더)으로 상대 좌석에 실제 패를 펼친다. 단축키가 아니라 버튼인 이유는 맥 전용 조합이었던 데다 모바일엔 키보드가 아예 없어서다. 서버 `racks`는 커밋 전까지 안 줄어들어서, 지금 보드에 올려둔 타일은 손패에서 흐리게(`.placing`) 표시한다. **기본이 꺼짐인 이유**: 켜는 순간 방의 누구나(devtools로도) 남의 패를 볼 수 있다. 몰래 켜지 못하게 ①설정 변경을 `announceSettings`가 시스템 채팅으로 남기고(입장 시 `chatHistory`로 재전송되므로 나중에 온 사람도 본다) ②게임 화면 턴 배너에 `.badge.reveal-on` 경고를 상시 띄운다. 로비 경고만으로는 켜자마자 `start`를 눌러 노출 시간을 수 ms로 만들 수 있었다. 방장이 끄면 펼쳐둔 상태도 자동으로 접힌다.
+- **엑셀 위장 테마**(`data-theme='excel'`, `theme-excel.css`): 전 화면을 MS Excel 스프레드시트로 위장해 회사에서 몰래 하는 컨셉. **핵심 불변조건 — 모든 UI가 배경 격자 위에 '떠 있는' 게 아니라 하나의 테이블(`.sheet-body` CSS Grid)의 실제 셀에 놓인다.** 셀 크기의 단일 원본은 `--cell-w`/`--cell-h`이고 손패 슬롯·보드 타일 크기가 전부 여기서 파생된다. 주의할 것 넷:
+  ① **테마는 `:root`(html)에 건다** — FLIP 클론과 터치 고스트가 `body`에 붙어 `.app` 밖이라, `.app` 스코프면 날아다니는 타일이 스킨을 못 받는다.
+  ② **`main.jsx`가 첫 렌더 전에 `data-theme`을 세팅해야 한다** — 늦으면 첫 페인트에 `.app{height:100vh}`가 없어 SheetGrid가 콘텐츠 높이를 재고 행 수가 폭발한다.
+  ③ **`JoinForm`/`WaitingRoom`은 `if (excel)`에서 조기 return한다** — 새 UI를 넣을 땐 **두 분기 모두에** 넣어야 한다(안 그러면 엑셀 모드에서만 기능이 통째로 사라진다. 실제로 관전자 목록·패 공개 설정이 그렇게 빠졌었다).
+  ④ **`useGridSnap`의 불변조건**: 측정 대상(`anchorRef`)에는 반환된 transform을 걸지 말 것. `getBoundingClientRect`가 transform을 반영하므로 재측정 시 잔여가 0이 되어 스냅이 스스로 풀린다 — 항상 '측정용 부모 / 이동할 자식'을 분리한다.
+  좁은 폭에선 채팅이 열을 6칸 고정으로 먹어 게임이 붕괴하므로, 모바일에선 좌우 분할 대신 위아래로 쌓는다. `.sheet`의 그리드 트랙은 반드시 `minmax(0, 1fr)` — 그냥 `1fr`이면 트랙 최소가 `.sheet-body`의 min-content(열 수 × 셀 폭)가 되어 시트가 화면 밖으로 밀려나가는 래칫이 돈다.
 - **터치 드래그**: HTML5 DnD(`dragstart`/`drop`)는 모바일 브라우저에서 발생하지 않아, `Game.jsx`가 포인터 이벤트(`pointerdown/move/up`, `pointerType !== 'mouse'`)로 드래그를 흉내낸다. **꾹 눌러서(220ms) 집는다** — 즉시 드래그로 하려면 타일에 `touch-action: none`이 필요한데 그러면 손패가 4줄을 넘을 때 세로 스크롤이 불가능해진다. 롱프레스 전에 8px 넘게 움직이면 드래그를 포기하고 브라우저 스크롤에 맡긴다. `pointerId`를 기억해 **다른 손가락의 이벤트는 무시**하고(안 그러면 두 번째 손가락이 드롭을 확정해버린다), 드래그 중 다른 타일을 누르면 이전 상태를 먼저 정리한다(고스트 클론 영구 잔류 방지). 손가락을 따라다니는 클론(`.touch-ghost`)을 body에 띄운 뒤, 놓는 순간 `elementFromPoint`로 대상을 찾아 **기존 드롭 핸들러**(`dropOnSlot`/`dropOnGrid`/`dropIntoMeld`/`dropIntoNewMeld`/`dropOnFelt`)에 합성 이벤트를 넘긴다 — 드롭 로직은 이중화하지 않는다. 타일은 `touch-action: pan-y`라 롱프레스 전에는 세로 스크롤이 그대로 되고, 집힌 뒤에는 `touchmove`를 `preventDefault`해서 스크롤을 막는다(스크롤을 막는 건 `pointermove`가 아니라 `touchmove`다). 마우스는 그대로 네이티브 DnD. (터치엔 Shift가 없어 블럭 드래그는 마우스 전용 — 정렬 버튼으로 대체)
 - **반응형**: `styles.css`의 `@media` 규칙은 **반드시 파일 맨 끝** "반응형" 절에 둔다. `:root` 변수·기본 규칙과 명시도가 같아서 위쪽에 두면 뒤 선언에 덮인다(실제로 그래서 모바일 규칙이 통째로 죽어 있었음). 700px 이하에서 타일/슬롯 축소, 보드 `max-height: 46vh`, 채팅 접기(`.chat.collapsed`).
 - **타일 이동 애니메이션(FLIP)**: `Game.jsx`가 렌더마다 타일 위치를 앵커 상대좌표로 기억해 이동 시 이전→새 위치로 비행(body 위 fixed 클론 — overflow 클리핑 회피). 새 타일은 출처 추정(손패=뽑기 더미, 보드=현재 턴 좌석). 상대가 뽑으면(handCount 증가 감지) 더미→그 좌석으로 타일 뒷면 비행. 테이블 오른쪽 아래 **뽑기 더미**는 내 턴에 클릭하면 `draw`.
