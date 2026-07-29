@@ -386,11 +386,6 @@ button:disabled {
   background: var(--accent);
   color: #06283d;
 }
-/* 패 공개(디버그) 표식 — 켜져 있는 동안 턴 배너에 계속 보인다 */
-.badge.reveal {
-  background: #4c1d95;
-  color: #ddd6fe;
-}
 /* 패 펼치기 토글 — 단축키 대신 버튼이다(맥 전용 조합이었고 모바일엔 키보드가 없다).
    방 설정이 켜진 동안에만 렌더되므로 이 버튼만으로 남의 패를 볼 수는 없다. */
 .reveal-btn {
