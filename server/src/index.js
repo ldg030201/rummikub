@@ -40,6 +40,20 @@ function clearRoomTimer(room, key) {
 // 빈 방 정리: 로비면 즉시 삭제, 진행/종료 중이면 재접속 유예(GC) 후 삭제.
 // (진행 중 방을 즉시 지우면 잠깐 전원 끊길 때 게임/재접속이 영구 소실됨)
 function cleanupIfEmpty(room) {
+  // 좌석은 전부 끊겼는데 관전자만 남은 방: isEmpty()가 false라 GC되지 않는데, 관전자는
+  // PLAYER_ONLY 때문에 start/newGame을 못 보내 판을 되살릴 수도 없다 — 탈출구가 없는 상태다.
+  // 게다가 턴 타이머는 계속 돌아 이미 끊긴 사람에게 풀이 빌 때까지 타일을 뽑아준다.
+  // 그래서 이 경우엔 로비로 되돌려 관전자를 좌석으로 올린다(그러면 정상 진행 가능).
+  const seatedAlive = [...room.players.values()].some((p) => p.connected);
+  const watching = [...room.spectators.values()].some((s) => s.connected);
+  if (!seatedAlive && watching && room.phase !== 'lobby') {
+    clearRoomTimer(room, '_turnSkip');
+    clearRoomTimer(room, '_turnTimer');
+    room.resetToLobby();
+    sysChat(room, '🪑 참가자가 모두 나가서 판을 정리했어 — 보고 있던 사람들이 자리에 앉았어');
+    pushState(room);
+    return;
+  }
   if (!room.isEmpty()) {
     clearRoomTimer(room, '_gcTimer');
     return;
@@ -386,10 +400,18 @@ wss.on('connection', (ws, req) => {
 
         // 재접속: 토큰 우선(좌석 → 관전자), 없으면 이름+방코드 일치로 끊긴 좌석 복귀
         let newSpectator = false;
-        // 로비에 빈 좌석이 있는지 — 이름 폴백보다 먼저 봐야 한다
-        const seatFree = room.phase === 'lobby' && room.players.size < room.settings.maxPlayers;
+        // 로비에 앉을 자리가 있는지 — 관전자 복귀보다 좌석을 우선해야 하므로 먼저 계산한다.
+        // 접속 좌석만 센다(유령 좌석이 자리를 막지 않게 — seatSpectators와 같은 기준).
+        const seatFree =
+          room.phase === 'lobby' &&
+          [...room.players.values()].filter((p) => p.connected).length <
+            room.settings.maxPlayers;
         let playerId = room.reattachByToken(token, ws);
-        if (!playerId) playerId = room.reattachSpectatorByToken(token, ws);
+        // 관전자 복귀(토큰이든 이름이든)는 '앉을 자리가 없을 때'만. 로비에 빈 좌석이 생겼는데도
+        // 예전에 관전자였다는 이유로 관전에 고착되면 스스로는 좌석으로 못 돌아온다
+        // (관전자는 PLAYER_ONLY 때문에 newGame조차 못 보내고, 로비엔 승격 트리거가 없다).
+        // 토큰 경로에도 걸어야 한다 — 안 걸면 토큰을 잘 보관한 정상 클라이언트일수록 못 앉는다.
+        if (!playerId && !seatFree) playerId = room.reattachSpectatorByToken(token, ws);
         let reclaimedByName = false;
         if (!playerId) {
           playerId = room.reattachByName(name, ws);
@@ -397,9 +419,6 @@ wss.on('connection', (ws, req) => {
           // 남이 채간 경우라면 방 사람들이 알아챌 수 있는 유일한 단서다.
           if (playerId) reclaimedByName = true;
         }
-        // 관전 자리로의 이름 폴백은 '앉을 자리가 없을 때'만. 빈 좌석이 있는데도 예전에
-        // 관전자였다는 이유로 관전에 고착되면, 스스로는 좌석으로 못 돌아온다
-        // (관전자는 PLAYER_ONLY 때문에 newGame조차 못 보낸다).
         if (!playerId && !seatFree) playerId = room.reattachSpectatorByName(name, ws);
         if (!playerId) {
           // 이름 중복 방지 (좌석·관전자 통틀어)
@@ -412,10 +431,8 @@ wss.on('connection', (ws, req) => {
           }
           // 진행 중이거나 정원이 찼으면 좌석 대신 관전자로 입장.
           // (게임이 끝나고 새 게임을 시작하면 빈 좌석으로 자동 승격 — Room.seatSpectators)
-          const seatAvailable =
-            room.phase === 'lobby' && room.players.size < room.settings.maxPlayers;
           playerId = randomUUID();
-          if (seatAvailable) {
+          if (seatFree) {
             room.addPlayer(playerId, name, ws);
           } else if (room.addSpectator(playerId, name, ws)) {
             newSpectator = true;

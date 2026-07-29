@@ -406,18 +406,29 @@ test('isEmpty: 접속 중인 관전자가 있으면 빈 방이 아니다', () =>
   assert.equal(room.isEmpty(), true);
 });
 
-test('seatSpectators: 게임 중 끊긴 유령 좌석이 정원을 막지 않는다', () => {
+test('seatSpectators: 유령 좌석이 정원을 막지 않되, 유예 안이면 좌석은 보존된다', () => {
   const room = twoPlayerRoom();
   room.updateSettings('p1', { maxPlayers: 2 });
   room.start();
-  room.removeSocket('p2'); // 게임 중 이탈 → 좌석은 남고 connected=false
-  assert.equal(room.players.size, 2); // 유령이 정원을 차지한 상태
+  room.removeSocket('p2'); // 게임 중 이탈 (새로고침일 수도 있다)
   room.addSpectator('s1', '대기자', sock());
   room.resetToLobby(); // 새 게임 → 승격 시도
+
+  // 유령이 정원을 먹지 않으므로 관전자는 승격된다 (교착 해소)
   assert.equal(room.spectators.size, 0, '관전자가 승격돼야 한다');
   assert.equal(room.players.has('s1'), true);
-  assert.equal(room.players.has('p2'), false, '유령 좌석은 정리돼야 한다');
-  assert.equal(room.start().ok, true, '2명이 됐으니 시작 가능해야 한다');
+  // 그런데 유예 안이므로 밥의 좌석·토큰은 살아 있다 (새로고침 중이었을 수 있다)
+  assert.equal(room.players.has('p2'), true, '유예 중인 좌석은 보존돼야 한다');
+  assert.ok(room.players.get('p2').reconnectToken, '토큰도 유지');
+  assert.equal(room.start().ok, true, '접속 좌석 2명이라 시작 가능');
+});
+
+test('seatSpectators: 유예가 지난 유령 좌석은 정리된다', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  room.removeSocket('p2');
+  room.resetToLobby(Date.now() + NAME_REATTACH_MS + 1);
+  assert.equal(room.players.has('p2'), false, '유예 지난 좌석은 정리');
 });
 
 test('addSpectator: 새 입장이 새로고침 중인 관전자를 증발시키지 않는다', () => {

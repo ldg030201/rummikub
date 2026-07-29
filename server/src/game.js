@@ -281,23 +281,30 @@ export class Room {
 
   // 관전자를 빈 좌석으로 승격 (새 게임으로 로비에 돌아올 때 다음 판에 참여시킨다).
   // 정원이 차거나 이름이 겹치면 관전 상태로 남는다. id/토큰을 그대로 물려받아 재접속이 안 깨진다.
-  seatSpectators() {
+  seatSpectators(now = Date.now()) {
     // 게임 중 끊긴 좌석은 players에 남아 있다(재접속 대비). 로비로 돌아온 시점엔 그
-    // '유령 좌석'이 정원만 차지하고 게임엔 못 들어가므로, 승격 전에 먼저 정리한다.
-    // 안 그러면 정원 2인 방에서 한 명이 나가면 관전자가 영영 승격되지 못하고,
-    // 접속 좌석이 1명뿐이라 start()도 거부돼 방이 교착된다.
+    // '유령 좌석'이 정원만 차지하고 게임엔 못 들어가므로, 승격 전에 정리한다.
+    // 다만 **유예를 준다** — 그냥 다 지우면 게임이 끝난 직후 새로고침 중이던 사람의
+    // 좌석과 토큰까지 날아가, 돌아왔을 때 정원이 차 있으면 관전자로 강등되고
+    // 스스로는 좌석을 되찾을 수 없다(관전자는 newGame도 못 보낸다).
+    // 끊긴 지 오래된 좌석만 치우면 교착 해소 목적은 그대로 지켜진다.
     for (const [pid, p] of [...this.players]) {
-      if (!p.connected) {
-        this.players.delete(pid);
-        this.order = this.order.filter((id) => id !== pid);
-      }
+      if (p.connected) continue;
+      if (p.disconnectedAt != null && now - p.disconnectedAt < NAME_REATTACH_MS) continue;
+      this.players.delete(pid);
+      this.order = this.order.filter((id) => id !== pid);
     }
     for (const [sid, s] of [...this.spectators]) {
       if (!s.connected) {
         this.spectators.delete(sid);
         continue;
       }
-      if (this.players.size >= this.settings.maxPlayers) break;
+      // 정원은 '접속 중인 좌석' 기준. 유예 중인 유령 좌석까지 세면 그 사람이 돌아올 때까지
+      // 관전자가 승격되지 못하고, 접속 좌석이 2명 미만이면 start()도 거부돼 방이 멈춘다.
+      // 유령이 돌아오면 자기 좌석이 그대로 남아 있으므로(위에서 안 지웠다) 잠깐 정원을
+      // 넘길 수는 있지만, 그게 좌석을 잃거나 방이 교착되는 것보다 낫다.
+      const seated = [...this.players.values()].filter((p) => p.connected).length;
+      if (seated >= this.settings.maxPlayers) break;
       const nameTaken = [...this.players.values()].some((p) => p.name === s.name && p.connected);
       if (nameTaken) continue;
       this.spectators.delete(sid);
@@ -465,10 +472,10 @@ export class Room {
   }
 
   // 로비로 리셋 (새 게임) — 기다리던 관전자를 빈 좌석으로 올린다
-  resetToLobby() {
+  resetToLobby(now = Date.now()) {
     this.phase = 'lobby';
     this.game = null;
-    this.seatSpectators();
+    this.seatSpectators(now);
   }
 }
 
