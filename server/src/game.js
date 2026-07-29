@@ -12,6 +12,9 @@ export const TURN_TIME_OPTIONS = [0, 30000, 60000, 90000, 120000, 180000]; // 0 
 export const SET_COUNT_OPTIONS = ['auto', 1, 2];
 
 export const MAX_SPECTATORS = 10; // 방당 관전자 상한 (메모리 방어)
+// 토큰 없이 '이름만'으로 끊긴 좌석에 복귀할 수 있는 시간. 방 자체의 재접속 유예(5분)와 맞춘다.
+// 이보다 길면 잠복한 사람이 나중에 남의 좌석을 채갈 수 있고, 짧으면 정상 복귀가 막힌다.
+export const NAME_REATTACH_MS = 5 * 60 * 1000;
 
 // 방 공통 상태 — 수신자와 무관하게 동일한 부분 (브로드캐스트 시 1회만 생성)
 export function serializeBase(room) {
@@ -170,19 +173,26 @@ export class Room {
       connected: true,
       socket,
       reconnectToken: randomUUID(), // 재접속용 비밀 토큰 (좌석 탈취 방지)
+      authed: true, // 이 좌석을 처음 만든 소켓 = 본인
     });
     if (!this.order.includes(playerId)) this.order.push(playerId);
   }
 
-  // 이름으로 끊긴 좌석 복귀 (토큰이 없을 때 폴백 — 탭 닫고 다시 들어온 경우).
-  // 접속 중인 좌석은 탈취 못 하게 끊긴 좌석만 허용.
-  reattachByName(name, socket) {
+  // 이름+방코드만으로 끊긴 좌석에 복귀 (토큰이 없을 때의 폴백).
+  // 이건 인증이 아니다 — 방 코드와 이름은 방 안 모두에게 보이므로, 누구나 남이 끊기길 기다렸다
+  // 그 좌석(과 손패)을 가져갈 수 있다. 그래서 두 겹으로 좁힌다:
+  //   ① 끊긴 지 NAME_REATTACH_MS 이내에만 허용 — 잠복해 있다 나중에 채가는 걸 막는다
+  //   ② 복귀한 좌석은 authed=false로 표시 — 방 설정 변경 같은 권한 있는 조작을 막는다
+  //      (패 공개를 켜면 방 전원의 손패가 노출되므로 좌석 탈취의 파급이 크다)
+  // 정상 사용자는 토큰으로 돌아온다(탭을 닫아도 클라가 localStorage에 사본을 둔다).
+  reattachByName(name, socket, now = Date.now()) {
     for (const [pid, p] of this.players) {
-      if (p.name === name && !p.connected) {
-        p.connected = true;
-        p.socket = socket;
-        return pid;
-      }
+      if (p.name !== name || p.connected) continue;
+      if (p.disconnectedAt != null && now - p.disconnectedAt > NAME_REATTACH_MS) continue;
+      p.connected = true;
+      p.socket = socket;
+      p.authed = false; // 토큰으로 증명한 좌석이 아니다
+      return pid;
     }
     return null;
   }
@@ -193,6 +203,7 @@ export class Room {
     if (!token) return null;
     for (const [pid, p] of this.players) {
       if (p.reconnectToken === token) {
+        p.authed = true; // 비밀 토큰을 제시했으므로 본인이 맞다
         if (p.socket && p.socket !== socket) {
           try {
             p.socket.close();
@@ -296,6 +307,8 @@ export class Room {
         connected: true,
         socket: s.socket,
         reconnectToken: s.reconnectToken,
+        // 관전 자리를 스스로 만든 소켓이 그대로 좌석으로 올라온 것이므로 본인이 맞다
+        authed: s.authed !== false,
       });
       if (!this.order.includes(sid)) this.order.push(sid);
     }
@@ -314,6 +327,7 @@ export class Room {
     if (!p) return;
     p.connected = false;
     p.socket = null;
+    p.disconnectedAt = Date.now(); // 이름 폴백 허용 창(NAME_REATTACH_MS) 계산 기준
     // 로비 단계면 좌석에서 완전히 제거
     if (this.phase === 'lobby') {
       this.players.delete(playerId);

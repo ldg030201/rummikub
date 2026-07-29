@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ss } from './storage.js';
+import { ss, ls, tokenKey } from './storage.js';
 
 function wsUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
@@ -58,8 +58,13 @@ export function useRummikub() {
       }
       switch (msg.type) {
         case 'joined':
-          // 재접속 토큰 저장 (다음 재연결/새로고침 때 좌석 복귀에 사용)
-          if (msg.token) ss.set('rk_token', msg.token);
+          // 재접속 토큰 저장 (다음 재연결/새로고침 때 좌석 복귀에 사용).
+          // localStorage에도 방+이름 키로 사본을 둔다 — 탭을 닫았다 다시 들어와도
+          // 토큰으로 복귀하게 해서, 이름만으로 남의 좌석을 잡는 폴백에 기대지 않게 한다.
+          if (msg.token) {
+            ss.set('rk_token', msg.token);
+            ls.set(tokenKey(msg.roomId, msg.name), msg.token);
+          }
           pending.current = { roomId: msg.roomId, name: msg.name, token: msg.token };
           setMe({ playerId: msg.playerId, roomId: msg.roomId, name: msg.name });
           break;
@@ -113,9 +118,9 @@ export function useRummikub() {
     // 저장된 세션 있으면 자동 재입장 (같은 탭 새로고침 복구)
     const savedName = ss.get('rk_name');
     const savedRoom = ss.get('rk_room');
-    const savedToken = ss.get('rk_token');
     const active = ss.get('rk_active') === '1';
     if (active && savedName && savedRoom) {
+      const savedToken = ss.get('rk_token') || ls.get(tokenKey(savedRoom, savedName));
       pending.current = { roomId: savedRoom, name: savedName, token: savedToken };
     }
     return () => {
@@ -129,7 +134,8 @@ export function useRummikub() {
     (roomId, name) => {
       const rid = roomId.trim().toUpperCase();
       const nm = name.trim();
-      const token = ss.get('rk_token') || null; // 같은 좌석 복귀용(있으면)
+      // 같은 좌석 복귀용. 탭 세션이 날아갔으면 방+이름으로 저장해둔 내구 사본을 쓴다.
+      const token = ss.get('rk_token') || ls.get(tokenKey(rid, nm)) || null;
       pending.current = { roomId: rid, name: nm, token };
       ss.set('rk_name', nm);
       ss.set('rk_room', rid);
@@ -159,6 +165,11 @@ export function useRummikub() {
 
   const leave = useCallback(() => {
     rawSend({ type: 'leave' });
+    // 스스로 나갔으면 내구 사본도 지운다 — 안 지우면 다음에 같은 방·이름으로 들어올 때
+    // 이미 남에게 넘어갔을 수도 있는 옛 좌석의 토큰을 들고 가게 된다.
+    const room = ss.get('rk_room');
+    const nm = ss.get('rk_name');
+    if (room && nm) ls.del(tokenKey(room, nm));
     ss.del('rk_active');
     ss.del('rk_token');
     pending.current = null;

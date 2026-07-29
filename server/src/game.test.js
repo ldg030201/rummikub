@@ -1,7 +1,7 @@
 // game.js (Room) 통합 검증 — 결정적 시나리오
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Room, serializeState, TURN_TIME_MS, MAX_SPECTATORS } from './game.js';
+import { Room, serializeState, TURN_TIME_MS, MAX_SPECTATORS, NAME_REATTACH_MS } from './game.js';
 import { T, sock } from '../../shared/test-helpers.js';
 
 function twoPlayerRoom() {
@@ -428,4 +428,34 @@ test('addSpectator: 새 입장이 새로고침 중인 관전자를 증발시키�
   room.removeSocket('s1'); // 새로고침 중 (토큰으로 돌아올 예정)
   room.addSpectator('s2', '나중온사람', sock()); // 그 사이 다른 사람 입장
   assert.equal(room.reattachSpectatorByToken(token, sock()), 's1', '토큰 재접속이 살아있어야 한다');
+});
+
+test('좌석 탈취 방어: 이름 복귀는 유예 시간 안에서만 되고, 설정 변경 권한은 없다', () => {
+  const room = twoPlayerRoom();
+  room.start();
+  const hostToken = room.players.get('p1').reconnectToken;
+  room.removeSocket('p1'); // 앨리스(방장)가 끊김
+
+  // ① 유예가 지나면 이름만으로는 못 들어온다
+  const late = room.reattachByName('앨리스', sock(), Date.now() + NAME_REATTACH_MS + 1);
+  assert.equal(late, null, '유예 후 이름 복귀는 거부돼야 한다');
+
+  // ② 유예 안이면 복귀는 되지만 인증되지 않은 좌석이다
+  const pid = room.reattachByName('앨리스', sock());
+  assert.equal(pid, 'p1');
+  assert.equal(room.players.get('p1').authed, false, '이름 복귀는 인증된 좌석이 아니다');
+
+  // ③ 토큰으로 들어오면 인증된다
+  room.removeSocket('p1');
+  assert.equal(room.reattachByToken(hostToken, sock()), 'p1');
+  assert.equal(room.players.get('p1').authed, true);
+});
+
+test('좌석 탈취 방어: 새로 앉은 좌석과 승격된 관전자는 인증된 상태', () => {
+  const room = twoPlayerRoom();
+  assert.equal(room.players.get('p1').authed, true, '직접 앉은 좌석');
+  room.start();
+  room.addSpectator('s1', '구경꾼', sock());
+  room.resetToLobby();
+  assert.equal(room.players.get('s1').authed, true, '승격된 관전자');
 });

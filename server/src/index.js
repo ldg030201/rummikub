@@ -390,7 +390,13 @@ wss.on('connection', (ws, req) => {
         const seatFree = room.phase === 'lobby' && room.players.size < room.settings.maxPlayers;
         let playerId = room.reattachByToken(token, ws);
         if (!playerId) playerId = room.reattachSpectatorByToken(token, ws);
-        if (!playerId) playerId = room.reattachByName(name, ws);
+        let reclaimedByName = false;
+        if (!playerId) {
+          playerId = room.reattachByName(name, ws);
+          // 토큰 없이 이름만으로 좌석을 가져간 경우는 방에 알린다 — 정상 복귀면 그냥 안내이고,
+          // 남이 채간 경우라면 방 사람들이 알아챌 수 있는 유일한 단서다.
+          if (playerId) reclaimedByName = true;
+        }
         // 관전 자리로의 이름 폴백은 '앉을 자리가 없을 때'만. 빈 좌석이 있는데도 예전에
         // 관전자였다는 이유로 관전에 고착되면, 스스로는 좌석으로 못 돌아온다
         // (관전자는 PLAYER_ONLY 때문에 newGame조차 못 보낸다).
@@ -432,10 +438,22 @@ wss.on('connection', (ws, req) => {
         // 채팅 기록 전달 (입장/재접속 시)
         send(ws, { type: 'chatHistory', messages: room.chat });
         if (newSpectator) sysChat(room, `👀 ${seat.name}님이 관전을 시작했어`);
+        if (reclaimedByName) {
+          sysChat(room, `🔑 ${seat.name}님이 이름으로 좌석에 복귀했어 (토큰 없음 — 설정 변경은 잠김)`);
+        }
         break;
       }
 
       case 'settings': {
+        // 이름만으로 복귀한 좌석은 본인 증명이 안 된 상태다. 설정 변경은 파급이 커서
+        // (특히 패 공개 = 방 전원 손패 노출) 토큰으로 증명한 좌석에만 허용한다.
+        if (room.players.get(ctx.playerId)?.authed === false) {
+          send(ws, {
+            type: 'error',
+            message: '이름으로 복귀한 좌석이라 설정을 바꿀 수 없어. 원래 쓰던 탭/브라우저에서 접속해줘.',
+          });
+          return;
+        }
         // updateSettings는 settings 객체를 통째로 갈아끼우므로 이전 값을 먼저 잡아둔다
         const before = room.settings;
         const r = room.updateSettings(ctx.playerId, msg.settings);

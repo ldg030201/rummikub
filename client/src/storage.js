@@ -20,4 +20,10 @@ export const ss = {
 export const ls = {
   get: (k) => safe(() => localStorage.getItem(k), null),
   set: (k, v) => safe(() => localStorage.setItem(k, v)),
+  del: (k) => safe(() => localStorage.removeItem(k)),
 };
+
+// 재접속 토큰의 '내구' 사본 키. sessionStorage는 탭을 닫으면 사라져서, 다시 들어올 때
+// 토큰이 없어 이름 폴백에 의존하게 된다(= 방 코드와 이름만 알면 좌석을 뺏을 수 있는 경로).
+// 방+이름으로 키를 나눠 두면 같은 브라우저의 두 탭이 서로 다른 이름으로 앉아도 안 꼬인다.
+export const tokenKey = (roomId, name) => `rk_tok_${roomId}_${name}`;
