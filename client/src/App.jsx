@@ -33,7 +33,6 @@ const EXCEL_FAVICON =
 export default function App() {
   const { connected, me, state, error, reject, chat, nudged, actions } = useRummikub();
   const [toast, setToast] = useState(null);
-  const [activeCell, setActiveCell] = useState('A1'); // 엑셀 이름 상자에 표시할 활성 셀 참조
 
   // 테마: html 루트에 data-theme로 건다 (FLIP 클론이 body에 붙어 .app 밖이라 반드시 :root 스코프)
   const [theme, setTheme] = useState(() => ls.get('rk_theme') || 'default');
@@ -79,7 +78,7 @@ export default function App() {
           ? '=EDIT("입력 모드 — 내가 편집 중")'
           : `=WAIT("${turnPlayer?.name ?? '동료'} 님 편집 중")`;
   // 엑셀 모드에선 콘텐츠를 진짜 시트 프레임(열머리글·행번호·격자)으로 감싼다
-  const wrapSheet = (node) => (excel ? <SheetGrid onSelect={setActiveCell}>{node}</SheetGrid> : node);
+  const wrapSheet = (node) => (excel ? <SheetGrid>{node}</SheetGrid> : node);
 
   const mainContent = joined ? (
     <>
@@ -165,7 +164,7 @@ export default function App() {
       {excel && <ExcelRibbon />}
       {excel && (
         <ExcelFormulaBar
-          cell={activeCell}
+          cell="A1"
           value={formulaValue}
           right={deadlineLocal != null ? <TurnTimer deadline={deadlineLocal} /> : null}
         />
@@ -176,7 +175,7 @@ export default function App() {
         {/* 엑셀 모드: 게임+채팅을 '하나의 시트'(열 머리글·행번호 한 벌 공유)에 나란히. 기본 모드: 좌우 분리. */}
         {joined &&
           (excel ? (
-            <SheetGrid onSelect={setActiveCell}>
+            <SheetGrid>
               {/* 대기실 폼은 display:contents라 래퍼 없이 sheet-body 직속이어야 셀이 격자에 붙는다.
                   게임 보드는 왼쪽 열 범위·FLIP 앵커용 .sheet-game 래퍼가 필요. */}
               {state.phase === 'lobby' ? (

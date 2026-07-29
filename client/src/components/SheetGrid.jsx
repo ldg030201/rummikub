@@ -66,7 +66,7 @@ function colLabel(n) {
   return s;
 }
 
-export function SheetGrid({ children, onSelect }) {
+export function SheetGrid({ children }) {
   const rootRef = useRef(null);
   const bodyRef = useRef(null);
   const [m, setM] = useState(null); // { cols, rows, cellW, cellH }
@@ -104,20 +104,10 @@ export function SheetGrid({ children, onSelect }) {
   const cellW = m?.cellW ?? 48;
   const cellH = m?.cellH ?? 36;
 
-  // 활성 셀 — 엑셀에서 가장 알아보기 쉬운 시그니처(굵은 초록 테두리 + 우하단 채우기 핸들).
-  // 순수 장식이라 게임 로직과 무관하고, 클릭한 칸을 따라다니며 열/행 머리글도 같이 하이라이트한다.
-  const [sel, setSel] = useState({ c: 0, r: 0 });
-  const pickCell = (e) => {
-    const el = bodyRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const next = {
-      c: Math.max(0, Math.min(cols - 1, Math.floor((e.clientX - r.left) / cellW))),
-      r: Math.max(0, Math.min(rows - 1, Math.floor((e.clientY - r.top) / cellH))),
-    };
-    setSel(next);
-    onSelect?.(`${colLabel(next.c)}${next.r + 1}`); // 이름 상자에 셀 참조 전달
-  };
+  // 활성 셀(A1)은 '표시만' 한다 — 엑셀 시그니처라 보이긴 해야 하지만, 클릭으로 옮기는
+  // 기능은 뺐다. 게임 UI 위/뒤 어디를 눌러도 시트가 반응해서(채팅 뒤 셀이 선택되는 등)
+  // 조작을 방해했고, 장식이라 얻는 것보다 잃는 게 컸다.
+  const sel = { c: 0, r: 0 };
 
   return (
     <div className="sheet" ref={rootRef}>
@@ -140,7 +130,6 @@ export function SheetGrid({ children, onSelect }) {
         className="sheet-body"
         ref={bodyRef}
         style={{ '--cols': cols, '--rows': rows }}
-        onPointerDown={pickCell}
       >
         {/* 활성 셀 표시 — pointer-events:none이라 게임 조작을 가로막지 않는다 */}
         <div className="xl-active" style={{ gridColumn: sel.c + 1, gridRow: sel.r + 1 }} />
