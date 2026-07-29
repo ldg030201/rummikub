@@ -629,7 +629,22 @@ const interval = setInterval(() => {
 }, 30000);
 wss.on('close', () => clearInterval(interval));
 
-// 최후의 방어선: 예기치 못한 예외로 프로세스가 죽어 모든 방이 날아가는 걸 막는다
+// 부팅 실패는 복구 불가 — 여기서 죽어야 한다. 아래 uncaughtException 핸들러가 삼키면
+// 리스닝 소켓도 없는 좀비 프로세스가 살아남아, 어느 게 진짜 서버인지 알 수 없게 된다.
+// http 서버와 wss 양쪽에 건다 — ws는 http 서버의 'error'를 자기 쪽으로 재발행하는데,
+// wss에 핸들러가 없으면 EventEmitter가 즉시 throw해서 http 쪽 핸들러가 실행되지 못한다.
+function onFatalStartup(err) {
+  if (err?.code === 'EADDRINUSE') {
+    console.error(`포트 ${PORT}가 이미 사용 중이야. 기존 서버를 끄거나 PORT를 바꿔줘.`);
+  } else {
+    console.error('서버 시작 실패:', err?.stack || err);
+  }
+  process.exit(1);
+}
+server.on('error', onFatalStartup);
+wss.on('error', onFatalStartup);
+
+// 런타임 예외는 방 상태를 지키려고 삼킨다(한 소켓의 오류로 전체가 죽지 않게).
 process.on('uncaughtException', (err) => {
   console.error('uncaughtException:', err?.stack || err);
 });
