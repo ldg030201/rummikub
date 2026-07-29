@@ -1,6 +1,5 @@
 // 대기실: 참가자 목록 + 방 설정(방장) + 시작
-import { useRef } from 'react';
-import { useSheet, useGridSnap } from './SheetGrid.jsx';
+import { useSheet } from './SheetGrid.jsx';
 
 const TURN_TIME_LABELS = [
   [30000, '30초'],
@@ -32,16 +31,123 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
   const labelOf = (pairs, v) => pairs.find(([val]) => val === v)?.[1] ?? String(v);
   const effectiveSets =
     s.setCount === 'auto' ? (state.players.length >= 5 ? 2 : 1) : s.setCount;
-  const cardRef = useRef(null);
-  const sheet = useSheet();
-  const snap = useGridSnap(cardRef, excel, sheet.bodyRef); // 폼을 배경 격자에 스냅
+  const sheet = useSheet(); // 엑셀 분기에서 폼을 시트 열 가운데에 놓을 때 사용
+
+  // 엑셀 모드: display:contents로 각 셀을 sheet-body 그리드의 실제 셀에 직접 배치
+  if (excel) {
+    const FW = 11;
+    const c0 = Math.max(1, Math.round((sheet.cols - FW) / 2) + 1);
+    const col = (a, b) => ({ gridColumn: `${c0 + a} / ${c0 + b}` });
+    let r = 2;
+    const cells = [];
+    cells.push(
+      <div key="t" className="xf-cell xf-title" style={{ ...col(0, FW), gridRow: r++ }}>
+        공유 통합 문서
+      </div>
+    );
+    cells.push(
+      <div key="s" className="xf-cell xf-desc" style={{ ...col(0, FW), gridRow: r++ }}>
+        문서 코드 <b className="xf-code">{state.roomId}</b> — 이 코드와 주소를 동료에게 공유해
+      </div>
+    );
+    state.players.forEach((p) => {
+      cells.push(
+        <div
+          key={p.id}
+          className={`xf-cell xf-player ${p.id === me.playerId ? 'me' : ''}`}
+          style={{ ...col(0, FW), gridRow: r++ }}
+        >
+          <span className={`dot ${p.connected ? 'on' : 'off'}`} />
+          {p.name}
+          {p.id === state.hostId && <span className="badge">소유자</span>}
+          {p.id === me.playerId && <span className="badge you">나</span>}
+        </div>
+      );
+    });
+    const setRow = (label, control) => {
+      const rr = r++;
+      cells.push(
+        <div key={`${label}l`} className="xf-cell xf-label" style={{ ...col(0, 4), gridRow: rr }}>
+          {label}
+        </div>
+      );
+      cells.push(
+        <div key={`${label}v`} className="xf-cell xf-value" style={{ ...col(4, FW), gridRow: rr }}>
+          {control}
+        </div>
+      );
+    };
+    setRow(
+      '자동 저장',
+      isHost ? (
+        <select value={s.turnTimeMs} onChange={(e) => onSettings({ turnTimeMs: Number(e.target.value) })}>
+          {TURN_TIME_LABELS.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <b>{labelOf(TURN_TIME_LABELS, s.turnTimeMs)}</b>
+      )
+    );
+    setRow(
+      '공유 인원',
+      isHost ? (
+        <select value={s.maxPlayers} onChange={(e) => onSettings({ maxPlayers: Number(e.target.value) })}>
+          {[2, 3, 4, 5, 6].map((n) => (
+            <option key={n} value={n}>
+              {n}명
+            </option>
+          ))}
+        </select>
+      ) : (
+        <b>{s.maxPlayers}명</b>
+      )
+    );
+    setRow(
+      '데이터 세트',
+      isHost ? (
+        <select
+          value={s.setCount}
+          onChange={(e) => {
+            const v = e.target.value;
+            onSettings({ setCount: v === 'auto' ? 'auto' : Number(v) });
+          }}
+        >
+          {SET_COUNT_LABELS.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <b>{labelOf(SET_COUNT_LABELS, s.setCount)}</b>
+      )
+    );
+    cells.push(
+      <div key="info" className="xf-cell xf-desc" style={{ ...col(0, FW), gridRow: r++ }}>
+        현재 {state.players.length}명 공유 중 · 편집 시작하면 {effectiveSets}세트({effectiveSets * 106}
+        행) · 각자 14행
+      </div>
+    );
+    cells.push(
+      <button
+        key="start"
+        type="button"
+        className="xf-cell xf-submit"
+        style={{ ...col(0, FW), gridRow: r++ }}
+        onClick={onStart}
+        disabled={!canStart}
+      >
+        {canStart ? '편집 시작 (아무나 눌러도 돼)' : '2명 이상 있어야 시작'}
+      </button>
+    );
+    return <div className="xl-form">{cells}</div>;
+  }
 
   return (
-    <div
-      className="waiting card"
-      ref={cardRef}
-      style={snap ? { transform: `translate(${snap.x}px, ${snap.y}px)` } : undefined}
-    >
+    <div className="waiting card">
       <h1>{t('대기실', '공유 통합 문서')}</h1>
       <div className="room-share">
         {t('방 코드', '문서 코드')} <span className="code">{state.roomId}</span>

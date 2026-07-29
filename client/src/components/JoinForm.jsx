@@ -1,14 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ss } from '../storage.js';
-import { useSheet, useGridSnap } from './SheetGrid.jsx';
+import { useSheet } from './SheetGrid.jsx';
 
 export default function JoinForm({ onJoin, connected, excel }) {
   const [name, setName] = useState(ss.get('rk_name') || '');
   const [room, setRoom] = useState(ss.get('rk_room') || 'DONG');
   const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
-  const cardRef = useRef(null);
-  const sheet = useSheet();
-  const snap = useGridSnap(cardRef, excel, sheet.bodyRef); // 폼을 배경 격자에 스냅
+  const sheet = useSheet(); // 엑셀 분기에서 폼을 시트 열 가운데에 놓을 때 사용
 
   const submit = (e) => {
     e.preventDefault();
@@ -78,11 +76,7 @@ export default function JoinForm({ onJoin, connected, excel }) {
   }
 
   return (
-    <div
-      className="join card"
-      ref={cardRef}
-      style={snap ? { transform: `translate(${snap.x}px, ${snap.y}px)` } : undefined}
-    >
+    <div className="join card">
       <h1>{t('루미큐브 입장', '통합 문서 열기')}</h1>
       <p className="muted">
         {t('같은 ', '같은 ')}

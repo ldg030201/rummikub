@@ -39,7 +39,11 @@ body {
 }
 
 .app {
-  min-height: 100%;
+  /* 확정 높이(min-height가 아니라 height)여야 아래 flex 사슬이 '남은 높이'를 분배할 수 있다.
+     min-height만 두면 채팅 로그 콘텐츠가 그대로 높이를 밀어 올려 페이지 전체가 스크롤된다.
+     길어지는 건 채팅뿐이고, 그건 .chat-list 안에서만 스크롤되게 한다. */
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -142,6 +146,7 @@ body {
 .content {
   flex: 1;
   min-width: 0;
+  min-height: 0; /* 기본 auto면 콘텐츠보다 작아지지 못해 사슬이 늘어난다 */
   display: flex;
   flex-direction: column;
 }
@@ -770,6 +775,12 @@ button:disabled {
   position: relative;
   flex: 1;
 }
+/* 멜드(absolute)의 기준면. 엑셀 모드에선 이 래퍼만 격자로 이동하고
+   측정용 부모(.melds)는 제자리에 남는다 — useGridSnap 불변조건. */
+.melds-inner {
+  position: absolute;
+  inset: 0;
+}
 :root {
   --btile-w: 36px;
   --btile-h: 48px;
@@ -929,6 +940,12 @@ button:disabled {
   display: flex;
   gap: 6px;
 }
+/* 안쪽 래퍼(엑셀 모드에서 격자 스냅용 이동 대상)가 버튼 배치를 그대로 이어받는다.
+   래퍼가 기본 block이면 부모 flex의 자식이 하나뿐이 돼 버튼이 세로로 쌓인다. */
+.sort-btns-inner {
+  display: flex;
+  gap: 6px;
+}
 .rack-scroll {
   /* 가로 스크롤 없음: 열 수를 폭에 맞추고, 3줄 넘게 쌓이면 세로 스크롤 */
   overflow-x: hidden;
@@ -988,6 +1005,12 @@ button:disabled {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 10px;
+}
+/* 위 .sort-btns-inner와 같은 이유 — 래퍼가 세로 배치와 간격을 이어받는다 */
+.action-col-inner {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 .action-btn {

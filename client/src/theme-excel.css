@@ -147,16 +147,58 @@
 }
 .xl-ribbon-body {
   display: flex;
+  align-items: stretch;
   background: #fff;
   border-top: 1px solid var(--xl-grid);
   overflow-x: auto;
+  height: 64px; /* 실제 리본 본문 높이감 (아이콘 행 + 그룹명) */
 }
-.xl-ribbon-group {
-  padding: 9px 16px;
-  color: #777;
+/* 리본 그룹 = 도구 글리프 행 + 하단 그룹명 + 우하단 대화상자 표시기(↘) */
+.xl-rg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
   border-right: 1px solid var(--xl-grid);
   white-space: nowrap;
-  font-size: 11px;
+}
+.xl-rg-icons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  font-size: 14px;
+  color: #444;
+}
+.xl-rg-icon {
+  min-width: 16px;
+  text-align: center;
+}
+.xl-rg-name {
+  font-size: 10px;
+  color: var(--xl-header-text);
+  text-align: center;
+}
+.xl-rg::after {
+  content: '↘';
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 7px;
+  color: #b0b0b0;
+}
+/* '파일' 탭은 엑셀에서 유일하게 초록 채움 탭 */
+.xl-ribbon-tab.file {
+  background: var(--xl-green);
+  color: #fff;
+  border-bottom-color: var(--xl-green);
+}
+.xl-ribbon-collapse {
+  margin-left: auto;
+  padding: 6px 10px;
+  color: #999;
 }
 
 /* ── 수식 입력줄 ── */
@@ -187,6 +229,24 @@
   padding: 0 10px;
   color: #333;
   font-variant-numeric: tabular-nums;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 턴 타이머 자리 — 수식 입력줄 오른쪽 끝 (시트 안 배너 대신 여기서 보여준다) */
+.xl-formula-right {
+  padding: 0 12px;
+  line-height: 26px;
+  border-left: 1px solid var(--xl-grid);
+  color: var(--xl-green-dark);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.xl-formula-right .turn-timer.low {
+  color: #c00;
 }
 
 /* ── 시트 탭 (하단) ── */
@@ -345,17 +405,7 @@
   border-radius: 0;
   color: var(--text);
 }
-:root[data-theme='excel'] .turn-banner.mine {
-  background: var(--xl-sel-fill);
-  border-color: var(--xl-green);
-}
-
-/* 제출/되돌리기 → 각진 리본 버튼 (원형 → 사각) */
-:root[data-theme='excel'] .action-btn {
-  border-radius: 2px;
-  box-shadow: none;
-  border: 1px solid var(--xl-grid);
-}
+/* 제출/되돌리기 — 크기·테두리는 파일 끝의 '병합 셀' 절에서 최종 정의 */
 :root[data-theme='excel'] .action-btn.submit {
   background: var(--xl-green);
   color: #fff;
@@ -366,27 +416,13 @@
   color: var(--text);
 }
 
-/* 뽑기 더미 → "데이터 가져오기" 셀 스택 */
-:root[data-theme='excel'] .pool-tile {
-  background: #fff;
-  border: 1px solid var(--xl-grid);
-  border-radius: 0;
-}
+/* 뽑기 더미 스타일은 파일 끝의 '가져오기 셀 범위' 절에서 최종 정의 */
 :root[data-theme='excel'] .pool-hint,
 :root[data-theme='excel'] .pool-count {
   border-radius: 2px;
 }
 
-/* 상대 좌석 → 협업자 셀 표기 */
-:root[data-theme='excel'] .seat {
-  background: var(--xl-header-bg);
-  border: 1px solid var(--xl-grid);
-  border-radius: 0;
-}
-:root[data-theme='excel'] .seat.turn {
-  border-color: var(--xl-green);
-  background: var(--xl-sel-fill);
-}
+/* 상대 좌석 스타일은 파일 끝의 '게임 화면도 시트 격자 한 벌로' 절에서 최종 정의된다 */
 :root[data-theme='excel'] .mini-tile-back {
   background: #fff;
   border: 1px solid var(--xl-grid);
@@ -398,14 +434,7 @@
 
 /* ============ 깊은 셀화: 콘텐츠가 '셀 위의 카드'가 아니라 '셀 자체'로 ============ */
 
-/* 손패 타일이 슬롯(셀)을 꽉 채운다 — 숫자가 셀 값처럼 직접 (작은 카드 느낌 제거) */
-:root[data-theme='excel'] .slot .tile {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
+/* 손패 타일 셀화는 아래 '연속 시트' 절에서 최종 정의 */
 :root[data-theme='excel'] .slot .tile[draggable='true']:hover {
   box-shadow: inset 0 0 0 2px var(--xl-sel); /* 활성 셀 강조 */
 }
@@ -424,19 +453,8 @@
   border-radius: 0;
 }
 
-/* 카드(입장/대기실) → 병합 셀에 테두리 친 범위 (둥근 패널·그림자 제거) */
-:root[data-theme='excel'] .card {
-  border: 1px solid var(--xl-grid-strong);
-  box-shadow: none;
-  background: #fff;
-}
-
 /* 폼 입력/셀렉트 → 흰 셀 */
 :root[data-theme='excel'] input,
-:root[data-theme='excel'] .room-settings select {
-  background: #fff;
-  border: 1px solid var(--xl-grid);
-}
 :root[data-theme='excel'] input:focus {
   outline: 2px solid var(--xl-sel);
   outline-offset: -2px;
@@ -453,21 +471,6 @@
 }
 
 /* 대기실 참가자 목록 → 투명 셀 행 (배경 격자 비침). 내 줄만 옅은 초록 채움 */
-:root[data-theme='excel'] .player-list {
-  margin: 0;
-}
-:root[data-theme='excel'] .player-list li {
-  background: transparent;
-  border: none;
-  margin-bottom: 0;
-  min-height: var(--cell-h);
-  padding: 0 8px;
-}
-:root[data-theme='excel'] .player-list li.me {
-  outline: none;
-  border: none;
-  background: var(--xl-sel-fill);
-}
 :root[data-theme='excel'] .badge {
   background: var(--xl-header-bg);
   border: 1px solid var(--xl-grid);
@@ -486,25 +489,6 @@
 }
 
 /* 방 설정 → 투명 셀 행 (배경 격자 비침). 셀렉트는 값 셀에 녹아든다 */
-:root[data-theme='excel'] .room-settings {
-  background: transparent;
-  border: none;
-  padding: 0;
-  gap: 0;
-  margin: 0;
-}
-:root[data-theme='excel'] .room-settings .setting-row {
-  padding: 0 8px;
-  min-height: var(--cell-h);
-  border: none;
-}
-:root[data-theme='excel'] .room-settings select {
-  border: none;
-  background: transparent;
-  padding: 4px 6px;
-  color: var(--text);
-  font-weight: 600;
-}
 :root[data-theme='excel'] .nudge-btn {
   background: var(--xl-green);
   border: 1px solid var(--xl-green-dark);
@@ -525,7 +509,11 @@
 .chatx {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 브라우저 스크롤 앵커링이 렌더 중 위치를 보정하면서 scroll 이벤트를 쏴
+     '사용자가 위로 올렸다'로 오인되어 자동 따라가기가 꺼진다 */
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
   font-size: 12px;
@@ -673,18 +661,6 @@
   font-weight: 700;
 }
 
-/* 상대 좌석도 박스 제거 → 시트 위 '협업자 셀 범위'로 (하나의 시트 통일) */
-/* 상대 좌석 = 시트 위 '협업자 셀 범위' (흰 셀 + 테두리, 격자에 앉은 병합 범위) */
-:root[data-theme='excel'] .seat {
-  background: #fff;
-  border: 1px solid var(--xl-grid);
-  border-radius: 0;
-  padding: 3px 8px;
-}
-:root[data-theme='excel'] .seat.turn {
-  background: var(--xl-sel-fill);
-  border: 1px solid var(--xl-green);
-}
 :root[data-theme='excel'] .seat.turn .seat-name {
   color: var(--xl-green-dark);
   font-weight: 700;
@@ -700,7 +676,9 @@
 .sheet {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  /* 메인(시트)은 절대 스크롤되지 않는다 — 행 수를 가용 높이에 맞춰 채우므로 넘칠 일이 없다.
+     길어지는 건 채팅뿐이고, 그건 채팅 로그(.chatx) 안에서만 스크롤된다. */
+  overflow: hidden;
   display: grid;
   grid-template-columns: var(--gutter-w) 1fr;
   grid-template-rows: var(--head-h) 1fr;
@@ -765,7 +743,10 @@
 .sheet-body {
   grid-row: 2;
   grid-column: 2;
-  min-height: 100%;
+  /* 그리드 아이템 기본 min-height:auto면 자식(채팅) 높이만큼 늘어나 시트를 밀어낸다 */
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   background-color: #fff;
   background-image: linear-gradient(var(--xl-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--xl-grid) 1px, transparent 1px);
@@ -774,6 +755,8 @@
   display: grid;
   grid-template-columns: repeat(var(--cols, 14), var(--cell-w));
   grid-template-rows: repeat(var(--rows, 20), var(--cell-h));
+  /* 측정된 --rows보다 아래 셀(폼 gridRow)이 있어도 암묵적 행이 셀 높이로 고정돼 안 찌그러짐 */
+  grid-auto-rows: var(--cell-h);
   align-content: start;
 }
 /* 게임 = 왼쪽 열 범위, 채팅 = 오른쪽 6열 — 각각 시트 그리드의 셀 범위(아이템) */
@@ -786,6 +769,12 @@
 :root[data-theme='excel'] .sheet-body .chat-xl {
   grid-column: -7 / -1;
   grid-row: 1 / -1;
+  /* 그리드 아이템은 min-height:auto가 기본 — 0으로 낮춰야 안쪽 로그가 스크롤된다 */
+  min-height: 0;
+  overflow: hidden;
+  /* 기본 테마의 좁은 화면 규칙(.chat{width:100%;height:220px})이 시트 칼럼을 깨뜨리지 않게 */
+  width: auto;
+  height: auto;
 }
 /* 입장/대기실 폼: display:contents로 자식 셀이 sheet-body 그리드의 셀이 된다 */
 :root[data-theme='excel'] .xl-form {
@@ -825,23 +814,6 @@
 /* ============ 입장/대기실 폼 = 배경 격자에 뚫려 보이는 셀 (불투명 박스 없음) ============ */
 /* 카드는 투명 + JS로 격자에 스냅. 각 행은 투명(배경 격자가 그대로 비침)·셀 높이(--cell-h)라
    배경 격자선에 앉는다. 라벨=3셀(144px), 값=나머지. 채워진 셀은 버튼·선택 하이라이트뿐. */
-:root[data-theme='excel'] .card {
-  margin: 24px auto; /* 가로 가운데 (JS 스냅이 격자에 미세보정) */
-  max-width: 528px;
-  padding: 0;
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-:root[data-theme='excel'] .card h1 {
-  margin: 0;
-  padding: 0 8px;
-  min-height: var(--cell-h);
-  display: flex;
-  align-items: center;
-  font-size: 16px;
-  background: transparent;
-}
 :root[data-theme='excel'] .card > p,
 :root[data-theme='excel'] .card > .muted,
 :root[data-theme='excel'] .room-share {
@@ -853,36 +825,7 @@
   background: transparent;
   font-size: 13px;
 }
-:root[data-theme='excel'] .join form {
-  padding: 0;
-}
-:root[data-theme='excel'] .join form label {
-  display: grid;
-  grid-template-columns: 144px 1fr; /* 라벨 3셀 | 값 */
-  align-items: center;
-  gap: 0;
-  margin: 0;
-  padding: 0 8px;
-  min-height: var(--cell-h);
-  background: transparent;
-  font-size: 13px;
-  color: var(--xl-header-text);
-}
 :root[data-theme='excel'] .join form label input,
-:root[data-theme='excel'] .room-settings select {
-  border: none;
-  background: transparent;
-  border-radius: 0;
-  height: var(--cell-h);
-  color: var(--text);
-}
-:root[data-theme='excel'] .join form label input:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--xl-sel); /* 활성 셀 */
-}
-:root[data-theme='excel'] .join .row {
-  gap: 0;
-}
 :root[data-theme='excel'] .join .row .ghost {
   border: none;
   background: transparent;
@@ -907,9 +850,6 @@
 }
 
 /* ============ 뽑기 더미·액션 버튼을 시트 셀로 (박스 티 제거) ============ */
-:root[data-theme='excel'] .pool-pile {
-  background: transparent;
-}
 :root[data-theme='excel'] .action-col {
   background: transparent;
 }
@@ -948,11 +888,12 @@
 
 /* ============ 입장 폼 셀 스타일 (배치는 sheet-body 그리드, display:contents) ============ */
 /* .xl-form은 display:contents(위 sheet-body 섹션)라 아래 .xf-* 셀이 곧 시트 셀. */
+/* 배경 격자 '한 벌'만 선을 그린다. 셀은 흰배경·자체 테두리 없이 투명 —
+   그래서 격자선이 셀을 통과해 그대로 보이고(엑셀에서 긴 글자가 옆칸으로 흘러넘치듯),
+   이중선(배경선+셀테두리)이 사라져 배경과 완전히 하나가 된다. */
 :root[data-theme='excel'] .xf-cell {
   box-sizing: border-box;
-  background: #fff;
-  border-right: 1px solid var(--xl-grid);
-  border-bottom: 1px solid var(--xl-grid);
+  background: transparent;
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -964,7 +905,8 @@
 :root[data-theme='excel'] .xf-title {
   font-weight: 700;
   font-size: 15px;
-  background: var(--xl-header-bg);
+  /* 반투명 헤더 톤 — 격자선이 비쳐 배경과 한 겹으로 보인다 */
+  background: rgba(16, 124, 65, 0.05);
 }
 :root[data-theme='excel'] .xf-desc {
   color: var(--muted);
@@ -994,10 +936,8 @@
 :root[data-theme='excel'] .xf-btn {
   justify-content: center;
   cursor: pointer;
-  background: var(--xl-header-bg);
-  border-radius: 0;
-  border-top: none;
-  border-left: none;
+  /* 반투명 초록 톤 — 격자선 비쳐 배경과 한 겹 */
+  background: rgba(16, 124, 65, 0.07);
   font-weight: 600;
   color: var(--xl-green-dark);
 }
@@ -1006,10 +946,487 @@
   background: var(--xl-green);
   color: #fff;
   font-weight: 700;
-  border-radius: 0;
-  border-top: none;
-  border-left: none;
-  border-right: none;
   cursor: pointer;
   font-size: 14px;
+}
+
+/* 대기실 셀: 참가자 행·설정 값(셀렉트)·코드 */
+:root[data-theme='excel'] .xf-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+:root[data-theme='excel'] .xf-player.me {
+  background: var(--xl-sel-fill);
+}
+:root[data-theme='excel'] .xf-value select {
+  border: none;
+  background: transparent;
+  width: 100%;
+  height: 100%;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0;
+  cursor: pointer;
+}
+/* 값 표시(비방장): 부모가 flex-center라 height 강제 없이 그대로 수직 중앙 */
+:root[data-theme='excel'] .xf-value b {
+  font-weight: 600;
+  color: var(--text);
+}
+:root[data-theme='excel'] .xf-code {
+  color: var(--xl-green-dark);
+  letter-spacing: 1px;
+}
+
+/* ============ 게임 화면도 '배경 격자 한 벌' 위로 ============ */
+/* 타일 값은 셀 가운데 정렬 (앞의 우측정렬 규칙을 덮는다) */
+:root[data-theme='excel'] .tile {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+  text-align: center;
+}
+
+/* 상대 좌석 = 시트 위의 협업자 행. 흰 박스/테두리를 걷어내 배경 격자가 그대로 비친다.
+   폭·높이를 셀 배수로 맞춰 '병합된 셀 범위'처럼 격자에 앉는다. */
+:root[data-theme='excel'] .seats {
+  gap: 0;
+  margin-bottom: 0;
+  align-items: stretch;
+}
+:root[data-theme='excel'] .seat {
+  /* 셀 배수로 딱 맞으니 '채우기 적용된 병합 셀'처럼 배경을 채운다 (경계가 곧 격자선) */
+  background: var(--xl-header-bg);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: calc(var(--cell-w) * 4);
+  height: var(--cell-h);
+  padding: 0 8px;
+}
+:root[data-theme='excel'] .seat.turn {
+  background: var(--xl-sel-fill);
+  border: none;
+}
+/* 기본 테마는 어두운 배경용 흰 글씨 — 흰 시트에선 보이지 않으므로 되돌린다 */
+:root[data-theme='excel'] .seat .seat-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+:root[data-theme='excel'] .seat .mini-badge,
+:root[data-theme='excel'] .seat .seat-off {
+  background: transparent;
+  border-radius: 0;
+  padding: 0 0 0 4px;
+  color: var(--muted);
+  font-weight: 600;
+}
+:root[data-theme='excel'] .seat .mini-hand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+:root[data-theme='excel'] .seat .mini-fan {
+  overflow: hidden;
+  max-width: calc(var(--cell-w) * 1.5);
+}
+:root[data-theme='excel'] .seat .mini-tile-back {
+  width: 5px;
+  height: 16px;
+  border-radius: 0;
+  border: 1px solid var(--xl-grid);
+  background: #fff;
+  box-shadow: none;
+  /* 기본 테마의 -6px(부채꼴 겹침)은 폭보다 커서 전부 포개진다 → 테두리 한 줄만 공유 */
+  margin-left: -1px;
+}
+:root[data-theme='excel'] .seat .mini-tile-back::after {
+  display: none; /* 뒷면 원형 무늬 — 셀 위장엔 불필요 */
+}
+/* 남은 개수 = 셀 값 (알약 배지 → 평범한 숫자) */
+:root[data-theme='excel'] .seat .seat-count {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 저장/실행취소 = 병합된 셀 (2열 × 2행). 위치는 Game.jsx가 격자에 스냅 */
+:root[data-theme='excel'] .action-col {
+  justify-content: flex-start;
+  gap: 0;
+}
+:root[data-theme='excel'] .action-col-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+:root[data-theme='excel'] .action-btn {
+  width: calc(var(--cell-w) * 2);
+  height: calc(var(--cell-h) * 2);
+  border-radius: 0;
+  border: 1px solid var(--xl-grid-strong);
+  box-shadow: none;
+}
+/* 되돌리기도 채우기 있는 셀로 (흰 배경에 묻히지 않게) */
+:root[data-theme='excel'] .action-btn.undo {
+  background: var(--xl-header-bg);
+}
+/* 맞닿은 변의 테두리는 하나만 그린다 — margin으로 겹치면 셀 배수가 깨져 다음 버튼이 행에서 밀린다 */
+:root[data-theme='excel'] .action-col-inner .action-btn + .action-btn {
+  border-top: none;
+}
+
+/* 세로 섹션 높이를 셀 배수로 고정 — 이게 어긋나면 아래 모든 콘텐츠가 행 경계에서 밀린다.
+   (기본 260px/66.5px 등은 36의 배수가 아니라 손패·버튼이 통째로 어긋나 있었다) */
+:root[data-theme='excel'] .table-area {
+  min-height: calc(var(--cell-h) * 7);
+}
+:root[data-theme='excel'] .empty-table {
+  height: calc(var(--cell-h) * 2);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+:root[data-theme='excel'] .rack-header {
+  height: var(--cell-h);
+  min-height: var(--cell-h);
+  padding: 0; /* 좌우 패딩이 있으면 오른쪽 끝 버튼 묶음이 열 경계에서 밀린다 */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+:root[data-theme='excel'] .rack-header > span:first-child {
+  white-space: nowrap;
+}
+:root[data-theme='excel'] .rack-tip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 뽑기 더미 = 시트 오른쪽 아래 '가져오기' 셀 범위 (2열 × 3행).
+   부채꼴 회전·그림자를 걷어내고 겹쳐 쌓인 시트 몇 장처럼 보이게 한다. */
+:root[data-theme='excel'] .pool-pile {
+  right: 0;
+  bottom: 0;
+  width: calc(var(--cell-w) * 2);
+  height: calc(var(--cell-h) * 3);
+  gap: 0;
+  justify-content: center;
+  /* 채우기 있는 병합 셀 범위 */
+  background: var(--xl-header-bg);
+  border: 1px solid var(--xl-grid-strong);
+}
+:root[data-theme='excel'] .pool-pile.can-draw:hover {
+  background: var(--xl-sel-fill);
+}
+:root[data-theme='excel'] .pool-tile {
+  border-radius: 0;
+  border: 1px solid var(--xl-grid);
+  background: #fff;
+  box-shadow: none;
+}
+:root[data-theme='excel'] .pool-tile:nth-child(1) {
+  transform: translate(-4px, -4px);
+}
+:root[data-theme='excel'] .pool-tile:nth-child(2) {
+  transform: translate(-2px, -2px);
+}
+:root[data-theme='excel'] .pool-tile::after,
+:root[data-theme='excel'] .pool-tile:nth-child(3)::after {
+  display: none; /* 타일 뒷면 원형 홈 — 시트 위장엔 불필요 */
+}
+/* 개수·안내는 알약 배지 대신 평범한 셀 값 */
+:root[data-theme='excel'] .pool-count {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+:root[data-theme='excel'] .pool-hint {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  color: var(--xl-green-dark);
+  animation: none;
+}
+
+/* 정렬 버튼도 셀 크기로 (1.5열 × 1행) */
+:root[data-theme='excel'] .sort-btns {
+  gap: 0;
+}
+:root[data-theme='excel'] .sort-btns-inner {
+  display: flex;
+  gap: 0;
+}
+:root[data-theme='excel'] .sort-btn {
+  width: var(--cell-w);
+  height: var(--cell-h);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  /* 흰 시트 위 흰 버튼은 경계가 묻힌다 → 채우기로 '버튼 셀'임을 드러낸다 */
+  background: var(--xl-header-bg);
+  border: 1px solid var(--xl-grid-strong);
+}
+:root[data-theme='excel'] .sort-btns .sort-btn + .sort-btn {
+  border-left: none;
+}
+:root[data-theme='excel'] .sort-btn:hover:not(:disabled) {
+  background: var(--xl-sel-fill);
+}
+/* 버튼 안 미니 타일은 밑줄·박스를 걷고 색 숫자만 (조각처럼 떠 보이던 원인) */
+:root[data-theme='excel'] .sort-btn .mini-t {
+  background: transparent;
+  border: none;
+  width: auto;
+  height: auto;
+  padding: 0 1px;
+}
+
+/* ============================================================
+   상태 표현 = 엑셀의 '조건부 서식' 언어
+   게임 피드백(유효/무효/드롭타겟/거부/준비)을 엑셀 셀 스타일로 번역한다.
+   앞쪽 절들과의 특이성 싸움을 끝내려고 파일 최후미에 한데 모았다.
+   색은 실제 엑셀 셀 스타일 값: 좋음 #C6EFCE/#006100, 나쁨 #FFC7CE/#9C0006, 보통 #FFEB9C/#9C6500
+   ============================================================ */
+:root[data-theme='excel'] {
+  --xl-good-bg: #c6efce;
+  --xl-good-fg: #006100;
+  --xl-bad-bg: #ffc7ce;
+  --xl-bad-fg: #9c0006;
+  --xl-warn-bg: #ffeb9c;
+  --xl-warn-fg: #9c6500;
+}
+
+/* 손패에서 '지금 내면 유효한 3장+' → 좋음 서식 (이전엔 규칙이 덮여 화면에 안 나왔다) */
+:root[data-theme='excel'] .slot .tile.ready {
+  background: var(--xl-good-bg);
+  color: var(--xl-good-fg);
+  box-shadow: none;
+}
+:root[data-theme='excel'] .slot .tile.ready .num {
+  color: inherit;
+}
+
+/* 드롭 타겟 = 엑셀 선택 범위 (굵은 초록 테두리 + 옅은 채우기) */
+:root[data-theme='excel'] .slot.over,
+:root[data-theme='excel'] .meld.over,
+:root[data-theme='excel'] .new-meld.over {
+  background: var(--xl-sel-fill);
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -2px;
+}
+
+/* 조합 = 서식이 걸린 셀 범위 */
+:root[data-theme='excel'] .meld.valid {
+  border-color: var(--xl-green);
+  background: transparent;
+}
+:root[data-theme='excel'] .meld.valid .tile {
+  background: var(--xl-good-bg);
+  color: var(--xl-good-fg);
+}
+:root[data-theme='excel'] .meld.invalid {
+  border-color: var(--xl-bad-fg);
+}
+:root[data-theme='excel'] .meld.invalid .tile {
+  background: var(--xl-bad-bg);
+  color: var(--xl-bad-fg);
+}
+:root[data-theme='excel'] .meld.valid .tile .num,
+:root[data-theme='excel'] .meld.invalid .tile .num {
+  color: inherit;
+}
+
+/* 서버가 커밋을 거부한 조합 = 엑셀 오류 셀 (좌상단 오류 표식 삼각형) */
+:root[data-theme='excel'] .meld.reject {
+  border-color: var(--xl-bad-fg);
+  background: var(--xl-bad-bg);
+  position: absolute; /* .meld의 absolute 유지 */
+}
+:root[data-theme='excel'] .meld.reject::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 5px solid transparent;
+  border-left-color: var(--xl-bad-fg);
+  border-top-color: var(--xl-bad-fg);
+  z-index: 2;
+}
+
+/* 새 범위 자리 = 점선 테두리 (엑셀 '표 삽입' 자리 느낌) */
+:root[data-theme='excel'] .new-meld {
+  border: 1px dashed var(--xl-grid-strong);
+  background: transparent;
+  color: var(--muted);
+}
+
+/* 드래그 중인 원본 타일 */
+:root[data-theme='excel'] .tile.ghost {
+  opacity: 0.35;
+}
+
+/* ============ 인터랙션 피드백 (엑셀 컨트롤 관습) ============ */
+:root[data-theme='excel'] .sort-btn,
+:root[data-theme='excel'] .action-btn,
+:root[data-theme='excel'] .pool-pile,
+:root[data-theme='excel'] .xf-btn,
+:root[data-theme='excel'] .xf-submit,
+:root[data-theme='excel'] .chatx-send,
+:root[data-theme='excel'] .xl-sheet {
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+:root[data-theme='excel'] .action-btn.submit:hover:not(:disabled) {
+  background: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .action-btn.undo:hover:not(:disabled),
+:root[data-theme='excel'] .xf-btn:hover {
+  background: var(--xl-sel-fill);
+}
+:root[data-theme='excel'] .xf-submit:hover:not(:disabled) {
+  background: var(--xl-green-dark);
+}
+:root[data-theme='excel'] .sort-btn:active:not(:disabled),
+:root[data-theme='excel'] .action-btn:active:not(:disabled),
+:root[data-theme='excel'] .xf-btn:active,
+:root[data-theme='excel'] .xf-submit:active:not(:disabled) {
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+/* 비활성 = 회색조 (엑셀은 흐리게만 하고 모양은 유지) */
+:root[data-theme='excel'] .action-btn:disabled,
+:root[data-theme='excel'] .sort-btn:disabled,
+:root[data-theme='excel'] .xf-submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 키보드 접근성 — 엑셀도 포커스 링을 그린다 */
+:root[data-theme='excel'] .sort-btn:focus-visible,
+:root[data-theme='excel'] .action-btn:focus-visible,
+:root[data-theme='excel'] .pool-pile:focus-visible,
+:root[data-theme='excel'] .xf-btn:focus-visible,
+:root[data-theme='excel'] .xf-submit:focus-visible {
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -2px;
+}
+
+/* ============ 위장 붕괴 지점 봉인 ============ */
+/* 화면 가운데 뜨는 오버레이·토스트·전체화면 오렌지 글로우는 '엑셀 화면'에서 가장 먼저 들통난다.
+   전부 엑셀이 실제로 쓰는 알림 형태(상태바 경고줄 / 셀 오류 표식)로 낮춘다. */
+
+/* 재촉 = 전체 화면 오렌지 테두리 펄스 → 수식 입력줄 한 줄 깜빡임 정도로 */
+:root[data-theme='excel'] .nudge-flash {
+  animation: xl-nudge 1.2s ease-out forwards;
+}
+@keyframes xl-nudge {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(16, 124, 65, 0);
+  }
+  15%,
+  60% {
+    box-shadow: inset 0 0 0 2px rgba(16, 124, 65, 0.55);
+  }
+}
+
+/* 승리 오버레이 → 어두운 암막 대신 옅은 흰 막 + 각진 대화상자 (엑셀 모달 톤) */
+:root[data-theme='excel'] .overlay {
+  background: rgba(255, 255, 255, 0.6);
+}
+:root[data-theme='excel'] .overlay-card {
+  background: #fff;
+  border: 1px solid var(--xl-grid-strong);
+  border-top: 3px solid var(--xl-green);
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 22px 32px;
+}
+
+/* 토스트 = 화면 하단 가운데 알약 → 상태바 위에 붙는 각진 경고줄 */
+:root[data-theme='excel'] .toast {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  max-width: none;
+  border-radius: 0;
+  padding: 6px 14px;
+  font-size: 12px;
+  box-shadow: none;
+  border-top: 1px solid var(--xl-grid-strong);
+  animation: none;
+}
+:root[data-theme='excel'] .toast.error {
+  background: var(--xl-bad-bg);
+  color: var(--xl-bad-fg);
+  border-top-color: var(--xl-bad-fg);
+}
+
+/* ============ 활성 셀 = 엑셀의 단일 시그니처 ============ */
+/* 굵은 초록 테두리 + 우하단 채우기 핸들. 엑셀을 아는 사람은 이 초록 사각형 하나로 진짜라고 판단한다. */
+.xl-active {
+  pointer-events: none; /* 게임 조작(드래그/드롭)을 절대 가로막지 않는다 */
+  position: relative;
+  z-index: 4;
+  outline: 2px solid var(--xl-sel);
+  outline-offset: -1px;
+}
+.xl-active::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  box-sizing: border-box;
+  background: var(--xl-sel);
+  border: 1px solid #fff;
+}
+/* 활성 셀이 속한 열/행 머리글도 함께 강조 — 위치를 눈으로 추적하는 엑셀의 핵심 장치 */
+.sheet-col.sel,
+.sheet-rownum.sel {
+  background: #cbe4d5;
+  color: var(--xl-green-dark);
+  font-weight: 600;
+}
+.sheet-col.sel {
+  box-shadow: inset 0 -2px 0 var(--xl-green);
+}
+.sheet-rownum.sel {
+  box-shadow: inset -2px 0 0 var(--xl-green);
+}
+/* 셀 영역 커서 = 엑셀 십자 */
+:root[data-theme='excel'] .sheet-body {
+  cursor: cell;
+}
+
+
+/* ============ 엑셀 스타일 스크롤바 ============ */
+/* macOS 기본 오버레이 스크롤바(반투명 검정 알약)가 가장 티 나는 비-엑셀 흔적이다. */
+:root[data-theme='excel'] .chatx::-webkit-scrollbar {
+  width: 16px;
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-left: 1px solid var(--xl-grid);
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-thumb {
+  background: #cdcdcd;
+  border: 1px solid #b0b0b0;
+}
+:root[data-theme='excel'] .chatx::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
