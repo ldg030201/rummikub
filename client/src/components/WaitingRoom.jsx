@@ -1,5 +1,6 @@
 // 대기실: 참가자 목록 + 방 설정(방장) + 시작
 import { useSheet } from './SheetGrid.jsx';
+import { effectiveSetCount } from '../../../shared/tiles.js';
 
 const TURN_TIME_LABELS = [
   [30000, '30초'],
@@ -29,8 +30,8 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
   const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
 
   const labelOf = (pairs, v) => pairs.find(([val]) => val === v)?.[1] ?? String(v);
-  const effectiveSets =
-    s.setCount === 'auto' ? (state.players.length >= 5 ? 2 : 1) : s.setCount;
+  // 서버 start()와 같은 함수를 쓴다 — 따로 계산하면 5인 방 안내가 거짓말이 된다
+  const effectiveSets = effectiveSetCount(state.players.length, s.setCount);
   const sheet = useSheet(); // 엑셀 분기에서 폼을 시트 열 가운데에 놓을 때 사용
 
   // 엑셀 모드: display:contents로 각 셀을 sheet-body 그리드의 실제 셀에 직접 배치

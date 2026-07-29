@@ -1189,8 +1189,12 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
             볼 기회 자체가 없다. 옆의 버튼이 실제로 패를 펼치는 토글. */}
         {roomReveal && (
           <>
+            {/* 관전자는 손패가 없다(personalizeState의 myHand: []) — '내 손패가 보인다'는
+                사실과 다르고, 관전자에게 필요한 정보는 반대 방향이다 */}
             <span className="badge reveal-on" title="이 방은 모두의 손패가 서로에게 공개돼 있어">
-              {t('🃏 패 공개된 방 — 내 손패가 모두에게 보여', '🃏 전체 범위 공유 중')}
+              {spectator
+                ? t('🃏 패 공개된 방 — 모두의 손패가 보여', '🃏 전체 범위 공유 중')
+                : t('🃏 패 공개된 방 — 내 손패가 모두에게 보여', '🃏 전체 범위 공유 중')}
             </span>
             <button
               type="button"

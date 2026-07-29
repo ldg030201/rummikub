@@ -54,3 +54,11 @@ export function shuffle(arr, rng = Math.random) {
   }
   return a;
 }
+
+// 실제로 쓸 타일 세트 수. 5인 이상은 1세트(106장)로는 못 하므로 설정과 무관하게 2세트를 강제한다.
+// 서버(game.start)와 클라(대기실 안내)가 같은 답을 내야 해서 여기 한 곳에만 둔다 —
+// 따로 구현했더니 5인 방에서 대기실은 '1세트(106장)'라고 안내하는데 서버는 212장을 쓰고 있었다.
+export function effectiveSetCount(seatCount, setting = 'auto') {
+  if (seatCount >= 5) return 2;
+  return setting === 'auto' ? 1 : setting;
+}

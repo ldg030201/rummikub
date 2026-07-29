@@ -1,6 +1,6 @@
 // 방(Room) + 게임 상태 관리
 import { randomUUID } from 'node:crypto';
-import { buildPool, shuffle } from '../../shared/tiles.js';
+import { buildPool, shuffle, effectiveSetCount } from '../../shared/tiles.js';
 import { validateCommit, isBoardShape } from '../../shared/rules.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
@@ -356,8 +356,7 @@ export class Room {
     }
 
     // 세트 수: 5인 이상은 1세트가 모자라 무조건 2세트, 그 외엔 설정(자동=1세트)
-    const setCount =
-      seated.length >= 5 ? 2 : this.settings.setCount === 'auto' ? 1 : this.settings.setCount;
+    const setCount = effectiveSetCount(seated.length, this.settings.setCount);
     let pool = shuffle(buildPool(setCount));
 
     const racks = {};

@@ -1,6 +1,7 @@
 // 간단한 룰 엔진 검증 (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { effectiveSetCount } from './tiles.js';
 import {
   isGroup,
   isRun,
@@ -205,4 +206,15 @@ test('validateCommit: [red9,조커,조커] 런으로 첫 등록 30점 인정', (
   const proposed = [{ id: 'm1', tiles: rack }];
   const r = validateCommit({ turnStartBoard: [], proposedBoard: proposed, rack, brokeIn: false });
   assert.equal(r.ok, true);
+});
+
+test('effectiveSetCount: 5인 이상은 설정과 무관하게 2세트 강제', () => {
+  assert.equal(effectiveSetCount(2, 'auto'), 1);
+  assert.equal(effectiveSetCount(4, 'auto'), 1);
+  assert.equal(effectiveSetCount(5, 'auto'), 2);
+  assert.equal(effectiveSetCount(6, 'auto'), 2);
+  // 방장이 1세트를 골라도 5인 이상이면 서버가 2세트를 쓴다 (대기실 안내도 같아야 한다)
+  assert.equal(effectiveSetCount(5, 1), 2);
+  assert.equal(effectiveSetCount(4, 2), 2);
+  assert.equal(effectiveSetCount(4, 1), 1);
 });
