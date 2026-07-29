@@ -160,6 +160,7 @@ export function useRummikub() {
       sendChat: cmd('chat', 'text'),
       nudge: cmd('nudge'),
       sendSettings: cmd('settings', 'settings'),
+      sendReveal: cmd('reveal', 'on'), // 패 보기 토글을 방에 알린다
     };
   }, [rawSend]);
 

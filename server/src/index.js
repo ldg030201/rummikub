@@ -549,6 +549,24 @@ wss.on('connection', (ws, req) => {
         break;
       }
 
+      // 패 보기 토글을 방에 알린다. 펼쳐보는 건 클라 로컬 상태라 서버가 알 길이 없는데,
+      // "지금 누가 내 패를 들여다보고 있나"는 방 사람들이 알아야 할 정보다.
+      // (관전자도 볼 수 있으므로 좌석 한정이 아니라 participant 기준)
+      case 'reveal': {
+        if (!room.settings.revealHands) return; // 꺼진 방에선 애초에 볼 게 없다
+        const who = room.participant(ctx.playerId);
+        if (!who) return;
+        if (rateLimited(who, '_reveal', 5000, 3)) return; // 토글 연타로 채팅 도배 방지
+        const on = msg.on === true;
+        if (who._revealOn === on) return; // 같은 상태 재전송은 무시
+        who._revealOn = on;
+        sysChat(
+          room,
+          on ? `👁 ${who.name}님이 패를 펼쳐봤어` : `🙈 ${who.name}님이 패를 접었어`
+        );
+        break;
+      }
+
       case 'nudge': {
         if (room.phase !== 'playing' || !room.game) return;
         const seat = room.players.get(ctx.playerId);

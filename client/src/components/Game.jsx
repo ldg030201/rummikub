@@ -1208,7 +1208,12 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
             <button
               type="button"
               className={`reveal-btn ${reveal ? 'on' : ''}`}
-              onClick={() => setReveal((v) => !v)}
+              onClick={() =>
+                setReveal((v) => {
+                  actions.sendReveal(!v); // 누가 펼쳐보는지 방에 알린다
+                  return !v;
+                })
+              }
             >
               {reveal ? t('🙈 패 접기', '🙈 범위 접기') : t('🃏 패 보기', '🃏 범위 펼치기')}
             </button>
