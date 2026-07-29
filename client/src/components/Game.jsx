@@ -326,7 +326,11 @@ function flyTileBack(from, to) {
 // 요소 크기에 반응하는 측정 훅 — 크기 변화마다 compute(el) 결과를 반환.
 // 첫 값도 ResizeObserver 콜백(레이아웃 확정 후)에서 받는다. 동기 측정은 flex 폭이
 // 확정되기 전에 실행돼 잘못된 값(예: 손패 열 수가 좁게)을 잡는 경우가 있어 쓰지 않는다.
-function useMeasured(ref, compute) {
+// resetKey: 값이 바뀌면 강제로 다시 측정한다. 측정 대상의 폭이 '조상'에 따라 달라질 때 필요 —
+// ResizeObserver는 관찰 대상 자신의 박스 변화만 알려주므로, 테마 전환처럼 레이아웃 전체가
+// 바뀌는 경우 낡은 값이 그대로 굳는다(실제로 게임 중 테마를 바꾸면 손패가 12열로 남아
+// 컨테이너를 넘쳐 오른쪽 타일이 잘렸다).
+function useMeasured(ref, compute, resetKey) {
   const [value, setValue] = useState(null);
   const computeRef = useRef(compute);
   computeRef.current = compute; // 최신 compute를 쓰되 옵저버는 재구성하지 않는다
@@ -335,10 +339,15 @@ function useMeasured(ref, compute) {
     if (!el) return undefined;
     const run = () => setValue(computeRef.current(el));
     run(); // 즉시 1회 측정 (옵저버 초기 콜백이 늦거나 안 오는 컨텍스트 대비)
+    // 테마 전환 직후엔 아직 새 CSS가 반영되기 전일 수 있어 다음 프레임에 한 번 더 잰다
+    const raf = requestAnimationFrame(run);
     const ro = new ResizeObserver(run);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [ref, resetKey]);
   return value;
 }
 
@@ -569,7 +578,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
       // 실제 폭이 잡히면 ResizeObserver가 재측정하고, reflowIfAutoPacked가 폭에 맞춰 다시 편다.
       if (inner <= slotW) return 14;
       return Math.max(4, Math.floor((inner + gap) / (slotW + gap)));
-    }) ?? 14;
+    }, excel) ?? 14; // 테마가 바뀌면 컨테이너 폭이 달라지므로 다시 잰다
 
   // 엑셀 모드: 손패 셀을 시트 셀 영역(sheet-body) 격자에 스냅
   const rackSnap = useGridSnap(rackScrollRef, excel, sheet.bodyRef);
