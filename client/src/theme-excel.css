@@ -538,18 +538,21 @@
 .chatx-line.msg {
   background: #fff;
 }
-/* 내 메시지 = '선택된 셀' (연파랑 채움 + 파란 테두리, 우측 정렬) */
+/* 내 메시지 = '선택된 셀' (연파랑 채움 + 파란 테두리, 우측 정렬).
+   아래쪽은 .chatx-line의 border-bottom을 파랗게 물들여 쓴다 — inset 그림자로 사방을 그리면
+   그 아래 격자선과 나란히 놓여 '선이 두 줄'로 보인다(셀 경계가 곧 격자선이어야 한다). */
 .chatx-line.msg.mine {
   background: #e8f0fe;
-  box-shadow: inset 0 0 0 1px #1a73e8;
+  border-bottom-color: #1a73e8;
+  box-shadow: inset 1px 1px 0 0 #1a73e8, inset -1px 0 0 0 #1a73e8;
   justify-content: flex-end;
   text-align: right;
 }
-/* 시간 = 옅은 회색 작은 셀 */
+/* 시간 = 옅은 회색 셀. 높이는 반드시 셀 한 칸 — 20px처럼 어중간하면 이 줄 아래로 모든
+   채팅 행이 배경 격자와 어긋나고, 어긋난 만큼 선이 겹쳐 보인다. */
 .chatx-line.time {
   color: #9aa0a6;
   font-size: 11px;
-  min-height: 20px;
 }
 .chatx-line.time.mine {
   justify-content: flex-end;
