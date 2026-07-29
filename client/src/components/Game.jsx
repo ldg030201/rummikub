@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Tile from './Tile.jsx';
-import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../rules.js';
+import { isValidMeld, meldValue, INITIAL_MELD_MIN } from '../../../shared/rules.js';
 import { ls, ss } from '../storage.js';
 import { useSheet, useGridSnap } from './SheetGrid.jsx';
 
@@ -379,6 +379,24 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   const playing = state.phase === 'playing';
   const ended = state.phase === 'ended';
   const isMyTurn = playing && state.isMyTurn;
+  const spectator = !!state.spectator; // 좌석 없이 보기만 하는 관전자 (조작 UI 전부 감춤)
+
+  // ---- 패 공개(디버그) — ⌘⌃⌥P ----
+  // 상대 손패와 그 변화를 좌석에 그대로 펼쳐 본다. 손패 데이터(state.hands)는 방 설정
+  // '패 공개'가 켜진 방에서만 서버가 내려주므로, 이 단축키만으로는 남의 패를 볼 수 없다.
+  const [reveal, setReveal] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      // Alt를 누르면 macOS에서 e.key가 특수문자로 바뀌므로 물리 키(e.code)로 판정
+      if (e.metaKey && e.ctrlKey && e.altKey && e.code === 'KeyP') {
+        e.preventDefault();
+        setReveal((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const revealHands = reveal ? state.hands : null; // { playerId: Tile[] } | null | undefined
 
   // ---- 턴 제한시간 카운트다운 ----
   const deadlineLocal = useDeadlineLocal(state);
@@ -588,6 +606,14 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   // 렌더링할 보드 (방어적으로 형태 필터)
   const rawBoard = isMyTurn && draftBoard ? draftBoard : state.board;
   const board = Array.isArray(rawBoard) ? rawBoard.filter((m) => m && Array.isArray(m.tiles)) : [];
+  // 지금 보드에 올라와 있는 타일 id. 서버 racks는 커밋 전까지 안 줄어들어서, 패 공개 때
+  // "내려놓는 중"인 타일이 손패에도 같이 보인다 — 이 집합으로 흐리게 구분한다.
+  const onBoardIds = useMemo(() => {
+    const s = new Set();
+    for (const m of board) for (const t of m.tiles) s.add(t.id);
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawBoard]);
 
   // ---- 보드 고정 배치: 폭 측정 + 멜드 자리 계산 ----
   const meldsRef = useRef(null);
@@ -958,6 +984,129 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     createMeldFromDrag(drag, { row, x });
   };
 
+  // ---- 터치 드래그 ----
+  // HTML5 DnD(dragstart/drop)는 모바일 브라우저에서 발생하지 않는다. 포인터 이벤트로
+  // 드래그를 흉내내되, 드롭은 위의 기존 핸들러를 그대로 재사용한다(로직 이중화 방지).
+  // 합성 이벤트: 핸들러가 쓰는 필드(clientX/Y·currentTarget·preventDefault·stopPropagation)만 채운다.
+  const synthEvent = (x, y, el) => ({
+    clientX: x,
+    clientY: y,
+    currentTarget: el,
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  const touchRef = useRef(null); // { tile, from, x0, y0, active, ghost, gx, gy }
+
+  // 손가락을 따라다니는 타일 클론 (네이티브 드래그 이미지 대체)
+  const makeGhost = (el, x, y) => {
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true);
+    g.className = `${el.className} touch-ghost`;
+    g.style.cssText =
+      `position:fixed;left:0;top:0;margin:0;width:${r.width}px;height:${r.height}px;` +
+      'pointer-events:none;z-index:1000;animation:none;';
+    document.body.appendChild(g);
+    return { ghost: g, gx: x - r.left, gy: y - r.top };
+  };
+
+  // 손가락 아래 요소 → 드롭 대상. 드래그 중엔 고스트가 pointer-events:none 이라 방해하지 않는다.
+  const targetUnder = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const slot = el.closest('.slot');
+    if (slot) return { kind: 'slot', el: slot };
+    if (el.closest('.rack-grid')) return { kind: 'grid', el: el.closest('.rack-grid') };
+    const newMeld = el.closest('.new-meld');
+    if (newMeld) return { kind: 'new', el: newMeld };
+    const meld = el.closest('.meld');
+    if (meld) return { kind: 'meld', el: meld };
+    const felt = el.closest('.melds') || el.closest('.table-area');
+    if (felt) return { kind: 'felt', el: felt };
+    return null;
+  };
+
+  const onTilePointerDown = (e, tile, from) => {
+    if (e.pointerType === 'mouse') return; // 마우스는 네이티브 DnD 사용
+    if (from === 'board' && !isMyTurn) return; // 손패 정렬은 남의 턴에도 허용
+    touchRef.current = {
+      tile,
+      from,
+      el: e.currentTarget,
+      x0: e.clientX,
+      y0: e.clientY,
+      active: false,
+      ghost: null,
+    };
+  };
+
+  // 최신 핸들러를 ref로 들고 window 리스너는 한 번만 건다 (렌더마다 재등록 방지)
+  const touchHandlers = useRef({});
+  touchHandlers.current.move = (e) => {
+    const st = touchRef.current;
+    if (!st) return;
+    if (!st.active) {
+      if (Math.hypot(e.clientX - st.x0, e.clientY - st.y0) < 8) return; // 탭과 구분
+      st.active = true;
+      dragRef.current = { ids: [st.tile.id], from: st.from };
+      setDragGhostIds(new Set([st.tile.id]));
+      Object.assign(st, makeGhost(st.el, e.clientX, e.clientY));
+    }
+    e.preventDefault(); // 드래그 중 스크롤/당겨서 새로고침 방지
+    st.ghost.style.transform = `translate(${e.clientX - st.gx}px, ${e.clientY - st.gy}px)`;
+
+    // 드롭 대상 하이라이트 (마우스의 dragover 대응)
+    const target = targetUnder(e.clientX, e.clientY);
+    if (target?.kind === 'slot' && canDropOnRack()) {
+      setOverSlot(keyOf(Number(target.el.dataset.r), Number(target.el.dataset.c)));
+      setOverTarget(null);
+      return;
+    }
+    setOverSlot(null);
+    if (target?.kind === 'new') setOverTarget('new');
+    else if (target?.kind === 'meld') setOverTarget(target.el.dataset.meldid ?? null);
+    else setOverTarget(null);
+  };
+
+  touchHandlers.current.end = (e) => {
+    const st = touchRef.current;
+    touchRef.current = null;
+    if (!st) return;
+    st.ghost?.remove();
+    if (!st.active) return; // 그냥 탭 — 아무 일도 안 일어남
+
+    const { clientX: x, clientY: y } = e;
+    const target = e.type === 'pointercancel' ? null : targetUnder(x, y);
+    const ev = target ? synthEvent(x, y, target.el) : null;
+    if (target?.kind === 'slot') {
+      dropOnSlot(ev, Number(target.el.dataset.r), Number(target.el.dataset.c));
+    } else if (target?.kind === 'grid') {
+      dropOnGrid(ev);
+    } else if (target?.kind === 'new') {
+      dropIntoNewMeld(ev);
+    } else if (target?.kind === 'meld') {
+      dropIntoMeld(ev, target.el.dataset.meldid);
+    } else if (target?.kind === 'felt') {
+      dropOnFelt(ev);
+    } else {
+      onDragEnd(); // 유효한 곳이 아니면 제자리 (드래그 취소)
+    }
+  };
+
+  useEffect(() => {
+    const move = (e) => touchHandlers.current.move(e);
+    const end = (e) => touchHandlers.current.end(e);
+    // passive:false — 드래그 중 preventDefault로 스크롤을 막아야 한다
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
+
   // ---- 버튼 ----
   const commit = () => draftBoard && actions.commit(draftBoard);
   const resetTurn = () => {
@@ -984,6 +1133,14 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
     <div className="game" ref={rootRef}>
       {/* 엑셀 모드: 턴 상태·타이머는 App이 수식 입력줄에 표시한다(시트엔 격자만) → 여기선 합계 힌트만 */}
       <div className={`turn-banner ${isMyTurn ? 'mine' : ''}`}>
+        {/* 관전/패공개 뱃지는 두 테마 공통 — 엑셀 수식 입력줄엔 이 정보가 안 실린다 */}
+        {spectator && <span className="badge watch">{t('👀 관전 중', '👀 읽기 전용')}</span>}
+        {reveal && (
+          <span className="badge reveal" title="⌘⌃⌥P로 끄기">
+            {revealHands ? t('🃏 패 공개 중', '🃏 전체 범위') : t('🔒 패 공개 꺼진 방', '🔒 잠김')}
+          </span>
+        )}
+        {/* 턴 문구는 엑셀 모드에서 App이 수식 입력줄로 옮겨 표시하므로 여기선 기본 테마만 */}
         {!excel &&
           (ended ? (
             <b>게임 종료</b>
@@ -1021,12 +1178,31 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                 {!p.connected && <span className="seat-off">{t('연결 끊김', '오프라인')}</span>}
               </div>
               <div className="mini-hand">
-                <div className="mini-fan">
-                  {Array.from({ length: Math.min(p.handCount, 24) }, (_, i) => (
-                    <span key={i} className="mini-tile-back" />
-                  ))}
-                  {p.handCount > 24 && <span className="mini-more">…</span>}
-                </div>
+                {revealHands?.[p.id] ? (
+                  /* 패 공개: 뒷면 대신 실제 타일을 펼친다 (서버 브로드캐스트마다 갱신 = 실시간 변화) */
+                  <div className="mini-fan revealed">
+                    {revealHands[p.id].map((rt) => (
+                      <span
+                        key={rt.id}
+                        className={[
+                          'mini-tile-face',
+                          rt.joker ? 'joker' : `c-${rt.color}`,
+                          onBoardIds.has(rt.id) ? 'placing' : '', // 지금 보드에 올려둔 것
+                        ].join(' ')}
+                        title={onBoardIds.has(rt.id) ? '지금 보드에 올려둔 타일' : undefined}
+                      >
+                        {rt.joker ? '★' : rt.num}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mini-fan">
+                    {Array.from({ length: Math.min(p.handCount, 24) }, (_, i) => (
+                      <span key={i} className="mini-tile-back" />
+                    ))}
+                    {p.handCount > 24 && <span className="mini-more">…</span>}
+                  </div>
+                )}
                 <span className="seat-count">{p.handCount}</span>
               </div>
             </div>
@@ -1064,6 +1240,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
               return (
                 <div
                   key={m.id}
+                  data-meldid={m.id}
                   style={{ left: p.x, top: p.row * boardMetrics.rowH }}
                   className={[
                     'meld',
@@ -1089,6 +1266,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                       draggable={isMyTurn}
                       onDragStart={onDragStartBoard}
                       onDragEnd={onDragEnd}
+                      onPointerDown={(e, tile) => onTilePointerDown(e, tile, 'board')}
                       ghost={dragGhostIds?.has(t.id)}
                     />
                   ))}
@@ -1148,7 +1326,20 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         )}
       </div>
 
-      {/* 내 손패 (2줄 슬롯 — 언제든 정렬 가능) */}
+      {/* 관전자는 손패가 없다 — 조작 영역 대신 안내만 */}
+      {spectator ? (
+        <div className="rack-area watching">
+          <div className="watch-note">
+            <b>{t('👀 관전 중', '👀 읽기 전용 모드')}</b>
+            <span className="muted">
+              {t(
+                '이번 판이 끝나고 새 게임을 시작하면 자동으로 참여돼. 그동안 채팅은 할 수 있어!',
+                '이 문서는 편집 권한이 없어. 다음 문서부터 공동 편집에 참여돼.'
+              )}
+            </span>
+          </div>
+        </div>
+      ) : (
       <div className="rack-area">
         <div className="rack-header">
           <span>
@@ -1239,6 +1430,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                         draggable
                         onDragStart={onDragStartRack}
                         onDragEnd={onDragEnd}
+                        onPointerDown={(e, tile) => onTilePointerDown(e, tile, 'rack')}
                         ready={readyIds.has(t.id)}
                         ghost={dragGhostIds?.has(t.id)}
                       />
@@ -1286,6 +1478,7 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
         )}
         </div>
       </div>
+      )}
 
       {/* 재촉받음: 화면 테두리 펄스 */}
       {nudgeFx && isMyTurn && <div key={nudgeFx} className="nudge-flash" />}
@@ -1300,9 +1493,18 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
                 : t('게임 종료', '문서 잠김')}
             </h1>
             <p className="muted">{t('모든 타일을 먼저 내려놓았어.', '모든 항목을 먼저 입력했어.')}</p>
-            <button className="primary big" onClick={actions.newGame}>
-              {t('새 게임 (대기실로)', '새 통합 문서')}
-            </button>
+            {spectator ? (
+              <p className="hint muted">
+                {t(
+                  '플레이어가 새 게임을 시작하면 다음 판부터 참여돼.',
+                  '편집자가 새 문서를 만들면 다음부터 참여돼.'
+                )}
+              </p>
+            ) : (
+              <button className="primary big" onClick={actions.newGame}>
+                {t('새 게임 (대기실로)', '새 통합 문서')}
+              </button>
+            )}
           </div>
         </div>
       )}

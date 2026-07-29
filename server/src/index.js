@@ -123,10 +123,13 @@ function pushState(room) {
   syncTurnTimer(room);
 }
 
-// 접속 중인 좌석 순회 (브로드캐스트 공통 — 접속자 판정을 한 곳으로)
+// 접속 중인 참가자(좌석 + 관전자) 순회 (브로드캐스트 공통 — 접속자 판정을 한 곳으로)
 function eachConnected(room, fn) {
   for (const [pid, p] of room.players) {
     if (p.connected && p.socket) fn(pid, p);
+  }
+  for (const [sid, s] of room.spectators) {
+    if (s.connected && s.socket) fn(sid, s);
   }
 }
 
@@ -240,6 +243,9 @@ const MSG_WINDOW_MS = 2000; // 메시지 속도 제한 윈도우
 const MSG_PER_WINDOW = 80; // 윈도우당 최대 메시지 (drag/draft 고려해 넉넉히)
 const connsByIp = new Map();
 
+// 좌석이 있어야만 보낼 수 있는 메시지 (관전자 차단). chat/leave는 관전자도 허용.
+const PLAYER_ONLY = new Set(['settings', 'start', 'draw', 'draft', 'commit', 'nudge', 'newGame']);
+
 // ---- WebSocket ---- (payload 상한으로 대용량 프레임 거부; 정상 board 커밋도 수십 KB면 충분)
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
@@ -316,6 +322,12 @@ wss.on('connection', (ws, req) => {
       const room = msg.type === 'join' ? null : rooms.get(ctx.roomId);
       if (msg.type !== 'join' && !room) return;
 
+      // 관전자는 보기·채팅만 가능 — 게임을 움직이는 조작은 좌석이 있어야 한다
+      if (PLAYER_ONLY.has(msg.type) && !room.players.has(ctx.playerId)) {
+        send(ws, { type: 'error', message: '관전 중이라 조작할 수 없어. 다음 판부터 참여돼!' });
+        return;
+      }
+
       switch (msg.type) {
       case 'join': {
         const roomId = String(msg.roomId || '').trim().toUpperCase().slice(0, 12);
@@ -329,7 +341,7 @@ wss.on('connection', (ws, req) => {
         // 같은 소켓이 다른 방으로 재-join하면 이전 방을 먼저 정리 (유령 방/좌석 누수 방지)
         if (ctx.roomId && ctx.roomId !== roomId) {
           const prev = rooms.get(ctx.roomId);
-          const prevP = prev?.players.get(ctx.playerId);
+          const prevP = prev?.participant(ctx.playerId);
           if (prev && prevP && prevP.socket === ws) {
             prev.removeSocket(ctx.playerId);
             if (prev.game && prev.currentPlayerId() === ctx.playerId) prev.advanceTurn();
@@ -347,38 +359,37 @@ wss.on('connection', (ws, req) => {
         const room = getOrCreateRoom(roomId);
         clearRoomTimer(room, '_gcTimer'); // 방이 다시 활성화됨
 
-        // 재접속: 토큰 우선, 없으면 이름+방코드 일치로 끊긴 좌석 복귀
+        // 재접속: 토큰 우선(좌석 → 관전자), 없으면 이름+방코드 일치로 끊긴 좌석 복귀
+        let newSpectator = false;
         let playerId = room.reattachByToken(token, ws);
+        if (!playerId) playerId = room.reattachSpectatorByToken(token, ws);
         if (!playerId) playerId = room.reattachByName(name, ws);
+        if (!playerId) playerId = room.reattachSpectatorByName(name, ws);
         if (!playerId) {
-          if (room.phase !== 'lobby') {
-            send(ws, {
-              type: 'error',
-              message: '이미 게임이 진행 중인 방이야. (같은 이름으로 입장하면 재접속 돼)',
-            });
-            return;
-          }
-          // 이름 중복 방지
-          const nameTaken = [...room.players.values()].some(
+          // 이름 중복 방지 (좌석·관전자 통틀어)
+          const nameTaken = [...room.players.values(), ...room.spectators.values()].some(
             (p) => p.name === name && p.connected
           );
           if (nameTaken) {
             send(ws, { type: 'error', message: '이미 같은 이름이 방에 있어.' });
             return;
           }
-          // 방 설정 정원 (로비의 players는 접속자만 남음)
-          if (room.players.size >= room.settings.maxPlayers) {
-            send(ws, {
-              type: 'error',
-              message: `방이 꽉 찼어 (최대 ${room.settings.maxPlayers}명).`,
-            });
+          // 진행 중이거나 정원이 찼으면 좌석 대신 관전자로 입장.
+          // (게임이 끝나고 새 게임을 시작하면 빈 좌석으로 자동 승격 — Room.seatSpectators)
+          const seatAvailable =
+            room.phase === 'lobby' && room.players.size < room.settings.maxPlayers;
+          playerId = randomUUID();
+          if (seatAvailable) {
+            room.addPlayer(playerId, name, ws);
+          } else if (room.addSpectator(playerId, name, ws)) {
+            newSpectator = true;
+          } else {
+            send(ws, { type: 'error', message: '관전자도 꽉 찼어. 잠시 후 다시 시도해줘.' });
             return;
           }
-          playerId = randomUUID();
-          room.addPlayer(playerId, name, ws);
         }
 
-        const seat = room.players.get(playerId);
+        const seat = room.participant(playerId);
         ctx = { roomId, playerId };
         send(ws, {
           type: 'joined',
@@ -390,6 +401,7 @@ wss.on('connection', (ws, req) => {
         pushState(room);
         // 채팅 기록 전달 (입장/재접속 시)
         send(ws, { type: 'chatHistory', messages: room.chat });
+        if (newSpectator) sysChat(room, `👀 ${seat.name}님이 관전을 시작했어`);
         break;
       }
 
@@ -449,7 +461,7 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'chat': {
-        const seat = room.players.get(ctx.playerId);
+        const seat = room.participant(ctx.playerId); // 관전자도 채팅은 가능
         if (!seat) return;
         // 채팅 속도 제한 (3초당 8건 초과분 드롭 — 스팸 방지)
         if (rateLimited(seat, '_chat', 3000, 8)) return;
@@ -482,8 +494,11 @@ wss.on('connection', (ws, req) => {
           send(ws, { type: 'error', message: '게임 진행 중엔 새 게임을 시작할 수 없어.' });
           return;
         }
+        const wasWatching = [...room.spectators.values()].filter((s) => s.connected).length;
         room.resetToLobby();
+        const seated = wasWatching - [...room.spectators.values()].filter((s) => s.connected).length;
         pushState(room);
+        if (seated > 0) sysChat(room, `🪑 관전자 ${seated}명이 이번 판에 참여해!`);
         break;
       }
 
@@ -510,7 +525,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     const room = rooms.get(ctx.roomId);
     if (!room) return;
-    const p = room.players.get(ctx.playerId);
+    const p = room.participant(ctx.playerId);
     // 이미 새 소켓으로 교체됨(재접속) → 이 close는 옛 소켓 것이므로 무시
     if (!p || p.socket !== ws) return;
     room.removeSocket(ctx.playerId);

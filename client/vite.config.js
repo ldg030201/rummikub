@@ -7,5 +7,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 룰 단일 원본(../shared/rules.js)을 dev 서버가 읽을 수 있게 상위 폴더 허용
+    fs: { allow: ['..'] },
   },
 });

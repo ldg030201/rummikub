@@ -49,9 +49,20 @@ function toSheetRows(messages, myId) {
 function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel }) {
   const [text, setText] = useState('');
   const [coolLeft, setCoolLeft] = useState(0);
+  // 모바일에선 채팅을 접어 게임에 화면을 내준다 (토글 버튼은 좁은 폭에서만 보임)
+  const [collapsed, setCollapsed] = useState(true);
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
   const stickingRef = useRef(false); // 프로그램이 스크롤을 옮기는 중인지
+  // 접힌 동안 쌓인 안 읽은 메시지 수 (모바일에서 놓치지 않게)
+  const [seenCount, setSeenCount] = useState(messages.length);
+  const unread = collapsed ? Math.max(0, messages.length - seenCount) : 0;
+  const toggle = () => {
+    setCollapsed((c) => {
+      if (c) setSeenCount(messages.length);
+      return !c;
+    });
+  };
 
   useEffect(() => {
     if (coolLeft <= 0) return undefined;
@@ -173,9 +184,20 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
 
   // ---- 기본 테마: 말풍선 채팅 ----
   return (
-    <aside className="chat">
+    <aside className={`chat ${collapsed ? 'collapsed' : ''}`}>
       <div className="chat-title">
         <span>💬 채팅</span>
+        {/* 모바일 전용 접기/펼치기 (CSS로 좁은 폭에서만 노출) */}
+        <button
+          type="button"
+          className="chat-toggle"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          title={collapsed ? '채팅 펼치기' : '채팅 접기'}
+        >
+          {unread > 0 && <span className="chat-unread">{unread > 99 ? '99+' : unread}</span>}
+          {collapsed ? '▲ 펼치기' : '▼ 접기'}
+        </button>
         {nudgeEnabled && (
           <button
             className="nudge-btn"
