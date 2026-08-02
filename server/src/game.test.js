@@ -145,17 +145,7 @@ test('reattachByToken: 토큰으로 좌석 복귀', () => {
   assert.equal(room.players.get('p1').connected, true);
 });
 
-test('reattachByName: 이름으로 끊긴 좌석만 복귀 (접속 중 좌석은 탈취 불가)', () => {
-  const room = twoPlayerRoom();
-  // 접속 중인 좌석은 이름이 같아도 복귀 불가
-  assert.equal(room.reattachByName('앨리스', sock()), null);
-  // 끊긴 뒤에는 이름으로 복귀 가능
-  room.players.get('p1').connected = false;
-  assert.equal(room.reattachByName('앨리스', sock()), 'p1');
-  assert.equal(room.players.get('p1').connected, true);
-  // 없는 이름은 불가
-  assert.equal(room.reattachByName('없는사람', sock()), null);
-});
+
 
 test('addChat: 트림·200자 제한·최대 200개 유지', () => {
   const room = twoPlayerRoom();
@@ -308,7 +298,7 @@ test('관전자: 이름이 겹치면 승격하지 않음', () => {
   assert.equal(room.players.size, 2);
 });
 
-test('관전자: 새로고침(끊김→토큰/이름 재접속)해도 같은 자리로 복귀', () => {
+test('관전자: 새로고침(끊김→토큰 재접속)해도 같은 자리로 복귀', () => {
   const room = twoPlayerRoom();
   room.start();
   room.addSpectator('s1', '구경꾼', sock());
@@ -327,11 +317,10 @@ test('관전자: 새로고침(끊김→토큰/이름 재접속)해도 같은 자
   assert.equal(room.reattachSpectatorByToken(token, sock()), 's1');
   assert.equal(room.spectators.size, 1); // 유령 관전자가 안 쌓임
 
-  // 토큰이 없으면 이름으로 폴백 (탭 닫고 재입장)
+  // 토큰이 없으면 복귀할 방법이 없다 (이름 폴백은 좌석 탈취 경로라 제거했다)
   room.removeSocket('s1');
-  assert.equal(room.reattachSpectatorByName('없는사람', sock()), null);
-  assert.equal(room.reattachSpectatorByName('구경꾼', sock()), 's1');
-  assert.equal(room.spectators.get('s1').connected, true);
+  assert.equal(room.spectators.get('s1').connected, false);
+  assert.equal(room.reattachSpectatorByToken('틀린토큰', sock()), null);
 });
 
 test('관전자: 끊긴 자리는 새 관전자가 들어올 때 정리 (상한 계산 오염 방지)', () => {
@@ -467,32 +456,23 @@ test('addSpectator: 새 입장이 새로고침 중인 관전자를 증발시키�
   assert.equal(room.reattachSpectatorByToken(token, sock()), 's1', '토큰 재접속이 살아있어야 한다');
 });
 
-test('좌석 탈취 방어: 이름 복귀는 유예 시간 안에서만 되고, 설정 변경 권한은 없다', () => {
+
+
+
+
+test('좌석 탈취 방어: 이름으로는 어떤 경우에도 남의 좌석을 못 가져간다', () => {
   const room = twoPlayerRoom();
   room.start();
-  const hostToken = room.players.get('p1').reconnectToken;
-  room.removeSocket('p1'); // 앨리스(방장)가 끊김
+  const token = room.players.get('p1').reconnectToken;
+  room.removeSocket('p1'); // 앨리스가 끊김
 
-  // ① 유예가 지나면 이름만으로는 못 들어온다
-  const late = room.reattachByName('앨리스', sock(), Date.now() + NAME_REATTACH_MS + 1);
-  assert.equal(late, null, '유예 후 이름 복귀는 거부돼야 한다');
+  // 이름 기반 복귀 API 자체가 없다 — 방 코드와 이름은 방 전원에게 보이므로
+  // 그것만으로 복귀를 허용하면 남이 좌석과 손패를 그대로 가져갈 수 있다.
+  assert.equal(typeof room.reattachByName, 'undefined');
+  assert.equal(typeof room.reattachSpectatorByName, 'undefined');
 
-  // ② 유예 안이면 복귀는 되지만 인증되지 않은 좌석이다
-  const pid = room.reattachByName('앨리스', sock());
-  assert.equal(pid, 'p1');
-  assert.equal(room.players.get('p1').authed, false, '이름 복귀는 인증된 좌석이 아니다');
-
-  // ③ 토큰으로 들어오면 인증된다
-  room.removeSocket('p1');
-  assert.equal(room.reattachByToken(hostToken, sock()), 'p1');
-  assert.equal(room.players.get('p1').authed, true);
-});
-
-test('좌석 탈취 방어: 새로 앉은 좌석과 승격된 관전자는 인증된 상태', () => {
-  const room = twoPlayerRoom();
-  assert.equal(room.players.get('p1').authed, true, '직접 앉은 좌석');
-  room.start();
-  room.addSpectator('s1', '구경꾼', sock());
-  room.resetToLobby();
-  assert.equal(room.players.get('s1').authed, true, '승격된 관전자');
+  // 정상 복귀는 비밀 토큰으로만 된다
+  assert.equal(room.reattachByToken('아무거나', sock()), null);
+  assert.equal(room.reattachByToken(token, sock()), 'p1');
+  assert.equal(room.players.get('p1').connected, true);
 });

@@ -185,29 +185,16 @@ export class Room {
       connected: true,
       socket,
       reconnectToken: randomUUID(), // 재접속용 비밀 토큰 (좌석 탈취 방지)
-      authed: true, // 이 좌석을 처음 만든 소켓 = 본인
     });
     if (!this.order.includes(playerId)) this.order.push(playerId);
   }
 
-  // 이름+방코드만으로 끊긴 좌석에 복귀 (토큰이 없을 때의 폴백).
-  // 이건 인증이 아니다 — 방 코드와 이름은 방 안 모두에게 보이므로, 누구나 남이 끊기길 기다렸다
-  // 그 좌석(과 손패)을 가져갈 수 있다. 그래서 두 겹으로 좁힌다:
-  //   ① 끊긴 지 NAME_REATTACH_MS 이내에만 허용 — 잠복해 있다 나중에 채가는 걸 막는다
-  //   ② 복귀한 좌석은 authed=false로 표시 — 방 설정 변경 같은 권한 있는 조작을 막는다
-  //      (패 공개를 켜면 방 전원의 손패가 노출되므로 좌석 탈취의 파급이 크다)
-  // 정상 사용자는 토큰으로 돌아온다(탭을 닫아도 클라가 localStorage에 사본을 둔다).
-  reattachByName(name, socket, now = Date.now()) {
-    for (const [pid, p] of this.players) {
-      if (p.name !== name || p.connected) continue;
-      if (p.disconnectedAt != null && now - p.disconnectedAt > NAME_REATTACH_MS) continue;
-      p.connected = true;
-      p.socket = socket;
-      p.authed = false; // 토큰으로 증명한 좌석이 아니다
-      return pid;
-    }
-    return null;
-  }
+  // ⚠ 이름 기반 좌석 복귀는 **의도적으로 없다**.
+  // 방 코드와 이름은 방 안 모두에게 보이므로, 그걸로 복귀를 허용하면 남이 끊기길 기다렸다
+  // 좌석과 손패를 그대로 가져갈 수 있다(인증이 아니라 이름만 아는 사람 아무나 통과하는 문).
+  // 복귀는 오직 비밀 reconnectToken으로만 한다 — 클라는 sessionStorage와
+  // localStorage(rk_tok_<방>_<이름>) 양쪽에 두므로 새로고침·탭 닫기까지는 커버된다.
+  // 시크릿 모드나 다른 기기에서는 복귀가 불가능한데, 남에게 좌석을 뺏기지 않는 쪽을 택했다.
 
   // 재접속 토큰으로 좌석 복귀. 성공하면 기존 playerId 반환.
   // 토큰이 일치하면 같은 사용자이므로, 옛 소켓이 남아있어도 새 소켓으로 교체(새로고침 대응).
@@ -215,7 +202,6 @@ export class Room {
     if (!token) return null;
     for (const [pid, p] of this.players) {
       if (p.reconnectToken === token) {
-        p.authed = true; // 비밀 토큰을 제시했으므로 본인이 맞다
         if (p.socket && p.socket !== socket) {
           try {
             p.socket.close();
@@ -259,18 +245,6 @@ export class Room {
             /* noop */
           }
         }
-        s.connected = true;
-        s.socket = socket;
-        return sid;
-      }
-    }
-    return null;
-  }
-
-  // 이름으로 끊긴 관전자 복귀 (토큰이 없을 때 폴백 — reattachByName의 관전자 판)
-  reattachSpectatorByName(name, socket) {
-    for (const [sid, s] of this.spectators) {
-      if (s.name === name && !s.connected) {
         s.connected = true;
         s.socket = socket;
         return sid;
@@ -326,8 +300,6 @@ export class Room {
         connected: true,
         socket: s.socket,
         reconnectToken: s.reconnectToken,
-        // 관전 자리를 스스로 만든 소켓이 그대로 좌석으로 올라온 것이므로 본인이 맞다
-        authed: s.authed !== false,
       });
       if (!this.order.includes(sid)) this.order.push(sid);
     }
