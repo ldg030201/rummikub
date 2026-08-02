@@ -97,16 +97,22 @@ npm test              # 룰·게임 로직 테스트 (node --test)
 rummikub/
 ├─ shared/            # 서버·클라 공용 모듈 (룰 단일 원본)
 │  ├─ rules.js        # 룰 검증 엔진 (권위 타일 재구성으로 치팅 방지)
-│  ├─ tiles.js        # 타일 생성/셔플
+│  ├─ tiles.js        # 타일 생성/셔플 + 실제 세트 수 계산
+│  ├─ limits.js       # 공용 상한 (재촉 쿨타임·채팅 길이)
 │  └─ rules.test.js   # 룰 테스트
 ├─ server/src/
 │  ├─ index.js        # HTTP(정적 서빙) + WebSocket(/ws), 방 수명주기·재접속
 │  ├─ game.js         # Room: 게임 상태·턴 진행·직렬화 (내 손패만 공개)
 │  └─ *.test.js       # 테스트
 ├─ client/src/
-│  ├─ App.jsx         # 화면 라우팅 (입장 → 대기실 → 게임)
+│  ├─ main.jsx        # 부트스트랩 (첫 렌더 전에 테마 적용)
+│  ├─ App.jsx         # 화면 라우팅 + 테마 + 엑셀 위장 크롬
 │  ├─ net.js          # WebSocket 훅 (재접속 토큰·지수 백오프)
+│  ├─ storage.js      # ss/ls 안전 래퍼 + 재접속 토큰 키
+│  ├─ styles.css      # 기본 테마
+│  ├─ theme-excel.css # 엑셀 위장 테마
 │  └─ components/     # JoinForm / WaitingRoom / Game(DnD) / Tile / Chat / Toast
+│                     #  + SheetGrid(시트 격자) / ExcelFrame(리본·수식줄·시트탭·상태바)
 ├─ Dockerfile         # 멀티스테이지 (클라 빌드 → 슬림 실행 이미지)
 └─ run.sh             # 로컬 실행 스크립트 (빌드 + 서버)
 ```
