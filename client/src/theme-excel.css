@@ -98,7 +98,6 @@
 }
 
 /* 엑셀은 평면 UI — 들뜨는 등장/펄스 애니메이션 억제 (FLIP은 JS라 영향 없음) */
-:root[data-theme='excel'] .card,
 :root[data-theme='excel'] .toast,
 :root[data-theme='excel'] .overlay-card {
   animation: none;
@@ -420,10 +419,6 @@
 :root[data-theme='excel'] select,
 :root[data-theme='excel'] .badge,
 :root[data-theme='excel'] .mini-badge,
-:root[data-theme='excel'] .code,
-:root[data-theme='excel'] .nudge-btn,
-:root[data-theme='excel'] .player-list li,
-:root[data-theme='excel'] .room-settings,
 :root[data-theme='excel'] .mini-t {
   border-radius: 0;
 }
@@ -483,19 +478,7 @@
   border-color: var(--xl-green-dark);
   color: #fff;
 }
-:root[data-theme='excel'] .code {
-  background: var(--xl-header-bg);
-  border: 1px solid var(--xl-grid);
-  color: var(--xl-green-dark);
-  letter-spacing: 2px;
-}
-
 /* 방 설정 → 투명 셀 행 (배경 격자 비침). 셀렉트는 값 셀에 녹아든다 */
-:root[data-theme='excel'] .nudge-btn {
-  background: var(--xl-green);
-  border: 1px solid var(--xl-green-dark);
-}
-
 /* ============ 채팅 = '하나의 시트'의 오른쪽 열 (프레임 없음) ============ */
 /* 자기 열머리글·행번호·테두리 없이, 시트 오른쪽 열에 메시지 셀만. 좌측 1px 격자선으로 열 구분. */
 :root[data-theme='excel'] .chat-xl {
@@ -830,41 +813,7 @@
 /* ============ 입장/대기실 폼 = 배경 격자에 뚫려 보이는 셀 (불투명 박스 없음) ============ */
 /* 카드는 투명 + JS로 격자에 스냅. 각 행은 투명(배경 격자가 그대로 비침)·셀 높이(--cell-h)라
    배경 격자선에 앉는다. 라벨=3셀(144px), 값=나머지. 채워진 셀은 버튼·선택 하이라이트뿐. */
-:root[data-theme='excel'] .card > p,
-:root[data-theme='excel'] .card > .muted,
-:root[data-theme='excel'] .room-share {
-  margin: 0;
-  padding: 0 8px;
-  min-height: var(--cell-h);
-  display: flex;
-  align-items: center;
-  background: transparent;
-  font-size: 13px;
-}
-:root[data-theme='excel'] .join form label input,
-:root[data-theme='excel'] .join .row .ghost {
-  border: none;
-  background: transparent;
-  color: var(--xl-green-dark);
-  font-weight: 600;
-}
 /* 버튼(열기/시작)만 채워진 셀 */
-:root[data-theme='excel'] .card .primary.big,
-:root[data-theme='excel'] .join form .primary {
-  margin: 0;
-  border-radius: 0;
-  border: none;
-}
-:root[data-theme='excel'] .card .hint {
-  padding: 0 8px;
-  min-height: var(--cell-h);
-  display: flex;
-  align-items: center;
-  margin: 0;
-  background: transparent;
-  color: var(--muted);
-}
-
 /* ============ 뽑기 더미·액션 버튼을 시트 셀로 (박스 티 제거) ============ */
 
 /* 게임 세로 레이아웃을 셀 행에 맞춤 (거터 행번호와 콘텐츠가 어긋나지 않게) */
@@ -1514,4 +1463,12 @@
   border: 1px solid var(--xl-grid);
   background: #fff;
   font-size: 11px;
+}
+
+/* 관전자 뱃지 — 위의 공통 .badge 규칙(0,3,0)이 덮어써서 '소유자' 뱃지와 픽셀 단위로 같아졌다.
+   읽기 전용이라는 게 한눈에 구분돼야 하므로 회색 계열로 따로 준다. */
+:root[data-theme='excel'] .badge.watch {
+  background: #eceff1;
+  border-color: var(--xl-grid-strong);
+  color: #546e7a;
 }

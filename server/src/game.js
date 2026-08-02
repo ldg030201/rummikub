@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { buildPool, shuffle, effectiveSetCount } from '../../shared/tiles.js';
 import { validateCommit, isBoardShape } from '../../shared/rules.js';
+import { CHAT_MAX_LEN, CHAT_HISTORY } from '../../shared/limits.js';
 
 const INITIAL_HAND = 14; // 시작 손패 수
 // 턴 제한시간 기본값. 공식 룰은 1분이지만 온라인 드래그 조작이 실물보다 느려 90초로 완화.
@@ -154,7 +155,7 @@ export class Room {
 
   // 채팅 추가 (트림·200자 제한·최대 200개 유지). 빈 메시지는 null.
   addChat(name, text, system = false, senderId = null) {
-    const t = String(text ?? '').trim().slice(0, 200);
+    const t = String(text ?? '').trim().slice(0, CHAT_MAX_LEN);
     if (!t) return null;
     const entry = {
       name: String(name ?? '').slice(0, 20),
@@ -164,7 +165,7 @@ export class Room {
       senderId,
     };
     this.chat.push(entry);
-    if (this.chat.length > 200) this.chat.shift();
+    if (this.chat.length > CHAT_HISTORY) this.chat.shift();
     return entry;
   }
 

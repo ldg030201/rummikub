@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 
 import { Room, serializeBase, personalFields } from './game.js';
+import { NUDGE_COOLDOWN_MS } from '../../shared/limits.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
@@ -556,7 +557,7 @@ wss.on('connection', (ws, req) => {
         if (curId === ctx.playerId) return; // 자기 턴엔 재촉 불가
         // 5초 쿨타임 (플레이어별)
         const now = Date.now();
-        if (seat._nudgeTs && now - seat._nudgeTs < 5000) return;
+        if (seat._nudgeTs && now - seat._nudgeTs < NUDGE_COOLDOWN_MS) return;
         seat._nudgeTs = now;
         const target = room.players.get(curId);
         sysChat(room, `👉 ${seat.name}님이 ${target?.name ?? '현재 턴'}님을 재촉했어!`);

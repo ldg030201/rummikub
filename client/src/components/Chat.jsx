@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
+import { NUDGE_COOLDOWN_MS, CHAT_MAX_LEN } from '../../../shared/limits.js';
 
 // 이름 → 고정 색 (기본 테마용 말풍선 이름색)
 function nameColor(name) {
@@ -73,7 +74,7 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
 
   const nudge = () => {
     if (coolLeft > 0) return;
-    if (onNudge?.() !== false) setCoolLeft(5);
+    if (onNudge?.() !== false) setCoolLeft(NUDGE_COOLDOWN_MS / 1000);
   };
 
   useEffect(() => {
@@ -161,7 +162,7 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={connected ? '메모…' : '연결 중…'}
-            maxLength={200}
+            maxLength={CHAT_MAX_LEN}
             disabled={!connected}
           />
           {nudgeEnabled && (
@@ -232,7 +233,7 @@ function Chat({ messages, onSend, myId, connected, onNudge, nudgeEnabled, excel 
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={connected ? '메시지 입력...' : '연결 중...'}
-          maxLength={200}
+          maxLength={CHAT_MAX_LEN}
           disabled={!connected}
         />
         <button type="submit" className="primary sm" disabled={!connected}>
