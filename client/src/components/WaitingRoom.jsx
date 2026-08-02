@@ -27,7 +27,6 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
     setCount: 'auto',
     revealHands: false,
   };
-  const t = (a, b) => (excel ? b : a); // 엑셀 모드 위장 카피
 
   const labelOf = (pairs, v) => pairs.find(([val]) => val === v)?.[1] ?? String(v);
   // 서버 start()와 같은 함수를 쓴다 — 따로 계산하면 5인 방 안내가 거짓말이 된다
@@ -199,10 +198,10 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
 
   return (
     <div className="waiting card">
-      <h1>{t('대기실', '공유 통합 문서')}</h1>
+      <h1>대기실</h1>
       <div className="room-share">
-        {t('방 코드', '문서 코드')} <span className="code">{state.roomId}</span>
-        <span className="muted"> {t('— 이 코드와 접속 주소를 친구에게 공유해', '— 이 코드와 주소를 동료에게 공유해')}</span>
+        방 코드 <span className="code">{state.roomId}</span>
+        <span className="muted"> — 이 코드와 접속 주소를 친구에게 공유해</span>
       </div>
 
       <ul className="player-list">
@@ -210,7 +209,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
           <li key={p.id} className={p.id === me.playerId ? 'me' : ''}>
             <span className={`dot ${p.connected ? 'on' : 'off'}`} />
             {p.name}
-            {p.id === state.hostId && <span className="badge">{t('방장', '소유자')}</span>}
+            {p.id === state.hostId && <span className="badge">방장</span>}
             {p.id === me.playerId && <span className="badge you">나</span>}
           </li>
         ))}
@@ -223,7 +222,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
             <li key={s.id} className={s.id === me.playerId ? 'me' : ''}>
               <span className="dot watch">👀</span>
               {s.name}
-              <span className="badge watch">{t('관전', '읽기 전용')}</span>
+              <span className="badge watch">관전</span>
               {s.id === me.playerId && <span className="badge you">나</span>}
             </li>
           ))}
@@ -233,7 +232,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
       {/* 방 설정 — 방장만 변경 가능, 나머지는 현재 값 표시 */}
       <div className="room-settings">
         <div className="setting-row">
-          <span className="setting-label">{t('턴 시간', '자동 저장')}</span>
+          <span className="setting-label">턴 시간</span>
           {isHost ? (
             <select
               value={s.turnTimeMs}
@@ -250,7 +249,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
           )}
         </div>
         <div className="setting-row">
-          <span className="setting-label">{t('최대 인원', '공유 인원')}</span>
+          <span className="setting-label">최대 인원</span>
           {isHost ? (
             <select
               value={s.maxPlayers}
@@ -267,7 +266,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
           )}
         </div>
         <div className="setting-row">
-          <span className="setting-label">{t('타일 세트', '데이터 세트')}</span>
+          <span className="setting-label">타일 세트</span>
           {isHost ? (
             <select
               value={s.setCount}
@@ -288,7 +287,7 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         </div>
         {/* 패 공개(디버그) — 켜면 방 전원이 게임 화면의 버튼으로 서로의 패를 볼 수 있다 */}
         <div className="setting-row">
-          <span className="setting-label">{t('패 공개 (디버그)', '전체 범위 표시')}</span>
+          <span className="setting-label">패 공개 (디버그)</span>
           {isHost ? (
             <select
               value={s.revealHands ? 'on' : 'off'}
@@ -303,35 +302,32 @@ export default function WaitingRoom({ state, me, onStart, onSettings, excel }) {
         </div>
         {s.revealHands && (
           <p className="hint warn">
-            {t(
-              '⚠️ 이 방은 패 공개 모드야 — 참가자 누구나 게임 화면의 「패 보기」 버튼으로 서로의 손패를 볼 수 있어.',
-              '⚠️ 이 문서는 전체 범위가 공개돼 있어.'
-            )}
+            ⚠️ 이 방은 패 공개 모드야 — 참가자 누구나 게임 화면의 「패 보기」 버튼으로 서로의 손패를 볼 수 있어.
           </p>
         )}
         {!isHost && (
-          <p className="hint muted">{t('설정은 방장만 바꿀 수 있어.', '설정은 소유자만 바꿀 수 있어.')}</p>
+          <p className="hint muted">설정은 방장만 바꿀 수 있어.</p>
         )}
       </div>
 
       <p className="muted">
-        {t('현재 ', '현재 ')}
+        현재 
         {state.players.length}
-        {t('명 · 시작하면 ', '명 공유 중 · 편집 시작하면 ')}
+        명 · 시작하면 
         {effectiveSets}
-        {t('세트(', '세트(')}
+        세트(
         {effectiveSets * 106}
-        {t('장) 사용 · 각자 14장으로 시작', '행) · 각자 14행으로 시작')}
+        장) 사용 · 각자 14장으로 시작
       </p>
 
       <button className="primary big" onClick={onStart} disabled={!canStart}>
         {spectator
-          ? t('👀 관전 중 — 자리가 나면 참여돼', '👀 읽기 전용 — 자리가 나면 편집 참여')
+          ? '👀 관전 중 — 자리가 나면 참여돼'
           : canStart
-            ? t('게임 시작 (아무나 눌러도 돼)', '편집 시작 (아무나 눌러도 돼)')
-            : t('2명 이상 모여야 시작 가능', '2명 이상 있어야 편집 시작')}
+            ? '게임 시작 (아무나 눌러도 돼)'
+            : '2명 이상 모여야 시작 가능'}
       </button>
-      <p className="hint muted">{t('최대 6명까지 함께 할 수 있어.', '최대 6명까지 공동 편집 가능.')}</p>
+      <p className="hint muted">최대 6명까지 함께 할 수 있어.</p>
     </div>
   );
 }
