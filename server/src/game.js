@@ -56,12 +56,6 @@ export function serializeBase(room) {
       serverNow: Date.now(),
     });
 
-    // 패 공개(디버그) 모드가 켜진 방에서만 모두의 손패를 실어 보낸다.
-    // 기본은 꺼짐 — 켜면 방의 누구나 남의 패를 볼 수 있으므로 대기실 설정으로만 켤 수 있고,
-    // 설정값은 모두에게 브로드캐스트돼 몰래 켤 수 없다.
-    if (room.settings.revealHands) {
-      base.hands = Object.fromEntries(room.order.map((pid) => [pid, g.racks[pid] ?? []]));
-    }
   }
 
   return base;
@@ -75,13 +69,21 @@ export function personalFields(room, forPlayerId) {
   if (!room.game) return { spectator };
   const g = room.game;
   const isMyTurn = g.order[g.currentIndex] === forPlayerId;
-  return {
+  const out = {
     spectator,
     isMyTurn,
     myHand: g.racks[forPlayerId] ?? [],
     brokeIn: !!g.brokeIn[forPlayerId],
     turnStartBoard: isMyTurn ? g.turnStartBoard : undefined,
   };
+  // 패 공개: **직접 요청한 사람에게만** 전원 손패를 실어 보낸다(공용 base가 아니라 개인화 필드).
+  // 예전엔 설정만 켜지면 방 전원의 state에 hands가 실려서, 버튼을 안 누르고 devtools로
+  // 값만 읽으면 채팅 알림 없이 몰래 볼 수 있었다. 이제 `reveal` 요청이 있어야 내려가고,
+  // 그 요청은 반드시 시스템 채팅에 남는다. 덤으로 브로드캐스트도 가벼워진다.
+  if (room.settings.revealHands && room.participant(forPlayerId)?._revealOn) {
+    out.hands = Object.fromEntries(room.order.map((pid) => [pid, g.racks[pid] ?? []]));
+  }
+  return out;
 }
 
 // 수신자별 개인화 — 내 손패만 전체 공개
@@ -135,6 +137,11 @@ export class Room {
     if ('revealHands' in patch) {
       if (typeof patch.revealHands !== 'boolean') return { ok: false, reason: '잘못된 값이야.' };
       next.revealHands = patch.revealHands;
+      // 끌 때 펼쳐둔 사람들의 플래그도 같이 내린다 — 안 그러면 다시 켜는 순간
+      // 아무 요청(=채팅 알림) 없이 곧바로 다시 보이게 된다.
+      if (!patch.revealHands) {
+        for (const p of [...this.players.values(), ...this.spectators.values()]) p._revealOn = false;
+      }
     }
     this.settings = next;
     return { ok: true };

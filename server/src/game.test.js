@@ -372,17 +372,43 @@ test('패 공개: 기본은 꺼짐 — 남의 손패는 장수만 나간다', ()
   assert.equal(s.players.find((p) => p.id === 'p2').handCount, 14);
 });
 
-test('패 공개: 켜면 모두의 손패가 실리고, 설정은 방 전체에 보인다', () => {
+test('패 공개: 요청한 사람에게만 손패가 실린다 (설정만 켜선 아무것도 안 보임)', () => {
   const room = twoPlayerRoom();
   assert.equal(room.updateSettings('p1', { revealHands: true }).ok, true);
   room.start();
-  const s = serializeState(room, 'p1');
-  assert.equal(s.settings.revealHands, true); // 몰래 켤 수 없음 — 모두가 설정을 본다
-  assert.equal(s.hands.p2.length, 14);
-  assert.deepEqual(s.hands.p2, room.game.racks.p2);
-  // 관전자에게도 동일하게 보인다
+
+  // 설정은 방 전체에 보이지만(몰래 켤 수 없음), 손패는 아직 아무에게도 안 간다.
+  // 예전엔 여기서 이미 hands가 실려서 devtools로 조용히 볼 수 있었다.
+  const before = serializeState(room, 'p1');
+  assert.equal(before.settings.revealHands, true);
+  assert.equal(before.hands, undefined, '요청 전에는 손패가 실리면 안 된다');
+
+  // 요청(= 채팅에 기록되는 행위)한 뒤에만 내려온다
+  room.players.get('p1')._revealOn = true;
+  const after = serializeState(room, 'p1');
+  assert.equal(after.hands.p2.length, 14);
+  assert.deepEqual(after.hands.p2, room.game.racks.p2);
+
+  // 요청 안 한 밥에게는 여전히 안 보인다
+  assert.equal(serializeState(room, 'p2').hands, undefined);
+
+  // 관전자도 요청하면 볼 수 있다
   room.addSpectator('s1', '구경꾼', sock());
+  assert.equal(serializeState(room, 's1').hands, undefined);
+  room.spectators.get('s1')._revealOn = true;
   assert.equal(serializeState(room, 's1').hands.p1.length, 14);
+});
+
+test('패 공개: 설정을 끄면 펼쳐둔 플래그도 내려간다', () => {
+  const room = twoPlayerRoom();
+  room.updateSettings('p1', { revealHands: true });
+  room.start();
+  room.players.get('p1')._revealOn = true;
+  assert.ok(serializeState(room, 'p1').hands);
+  // 로비로 돌아가 설정을 끈다
+  room.resetToLobby();
+  room.updateSettings('p1', { revealHands: false });
+  assert.equal(room.players.get('p1')._revealOn, false, '플래그가 남으면 다시 켤 때 조용히 보인다');
 });
 
 test('패 공개: 방장만·로비에서만·불리언만', () => {

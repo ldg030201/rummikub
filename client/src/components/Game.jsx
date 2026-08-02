@@ -401,7 +401,9 @@ export default function Game({ state, me, actions, reject, nudged, excel }) {
   useEffect(() => {
     if (!roomReveal) setReveal(false);
   }, [roomReveal]);
-  const revealHands = reveal ? state.hands : null; // { playerId: Tile[] } | null | undefined
+  // 서버가 내려준 hands가 있을 때만 펼친다. 서버는 `reveal` 요청을 보낸 사람에게만 실어 주므로,
+  // 이 값의 존재 자체가 '요청했고 그 사실이 채팅에 남았다'는 뜻이다.
+  const revealHands = state.hands ?? null; // { playerId: Tile[] } | null
 
   // ---- 턴 제한시간 카운트다운 ----
   const deadlineLocal = useDeadlineLocal(state);

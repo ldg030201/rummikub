@@ -564,6 +564,7 @@ wss.on('connection', (ws, req) => {
           room,
           on ? `👁 ${who.name}님이 패를 펼쳐봤어` : `🙈 ${who.name}님이 패를 접었어`
         );
+        pushState(room); // 요청자에게 hands를 실어 보내고(끄면 빼고) 상태를 갱신
         break;
       }
 
